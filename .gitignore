@@ -1,0 +1,85 @@
+# 本地工具链与缓存（体积大，且每人机器不同）
+.tooling/
+.local/
+.pub-cache/
+**/.pub-cache/
+node_modules/
+
+# 构建产物
+**/build/
+**/out/
+dist/
+coverage/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.metadata
+
+# 打包安装包（apk / aab / ipa 等）
+*.apk
+*.aab
+*.ap_
+*.ipa
+*.apk.bytes
+*.dmg
+*.exe
+*.msi
+
+# Android 本地文件与签名
+**/local.properties
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/captures/
+**/key.properties
+*.keystore
+*.jks
+*.p12
+
+# iOS
+**/ios/Flutter/.last_build_id
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+
+# IDE 与编辑器
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.history/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# 本地私密配置
+.env
+.env.*
+!.env.example
+*.local
+secrets.*
+**/secrets.json
+
+# Claude Code 本地设置（settings.json 等可提交，settings.local.json 不提交）
+.claude/settings.local.json
+.claude/worktrees/
+
+# 日志与临时文件
+*.log
+*.tmp
+*.bak
+*.pid
+tmp/
+temp/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/

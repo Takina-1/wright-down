@@ -1,0 +1,34 @@
+name: local_diary
+description: "本地优先的文字日记开发预览版。"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path: ^1.9.1
+  sqflite: ^2.4.5
+  sqflite_common: ^2.5.14
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.5
+
+flutter:
+  uses-material-design: true
+
+# sqlite3 is brought in only by host-side FFI tests. The Android app uses
+# sqflite's platform implementation, not Dart FFI or a bundled SQLite binary.
+# Avoid downloading an unused Android library during native-assets hooks.
+hooks:
+  user_defines:
+    sqlite3:
+      source:
+        android: system
+        default: sqlite3
