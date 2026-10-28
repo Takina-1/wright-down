@@ -61,6 +61,6 @@ Android 项目仓库配置为 Flutter 引擎依赖只查询 Flutter 仓库，其
 ## 工程约定
 
 - 应用显示名称暂为“本地日记”，开发包名为 `dev.localdiary.local_diary`；正式名称、包名和签名待发布前确定。
-- 当前使用 `client/lib/src/` 四层目录与 `client/test/`。早期通用骨架中的 `client/src/`、`client/tests/` 已迁移，不作为源码入口。
-- 当前未初始化 Git，不存在已提交版本。开始使用版本控制时，应保留根和客户端 `.gitignore`，提交 `pubspec.lock`，不要提交 SDK、缓存或真实日记。
+- 当前使用 `client/lib/src/` 四层目录与 `client/test/`。早期通用骨架中的 `client/src/`、`client/tests/` 已迁移，不作为源码入口，仅保留 `.gitkeep` 占位以维持目录结构。
+- Git 已初始化并推送到 `origin/main`。提交时保留根和客户端 `.gitignore`，提交 `pubspec.lock`，不要提交 SDK、缓存或真实日记。
 - Android 工具链检查不要求 Web Chrome 或 Windows C++ 桌面工具链通过；这些平台不属于 F001。
