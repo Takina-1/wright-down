@@ -8,4 +8,4 @@
 |---|---|---|---|---|
 | F001 | [本地文字记录](F001-本地记录测试报告-local-entry-test-report.md) | 2026-10-28 | 0.1.0+1，当前工作区（无 Git 提交） | 27 项测试、静态分析与 APK 构建通过；设备验收待完成 |
 | F002 | [特性分支开发流程](F002-特性分支流程测试报告-feature-branch-workflow-test-report.md) | 2026-10-29 | `feat/F002-feature-branch-workflow` | 规则、链接、分支、格式检查及 27 项回归测试通过 |
-| F003 | [保留已合并的特性分支](F003-保留特性分支测试报告-retain-feature-branches-test-report.md) | 2026-10-29 | `feat/F003-retain-feature-branches` | 合并前规则、链接、27 项测试和分析通过；待合并后确认分支保留 |
+| F003 | [保留已合并的特性分支](F003-保留特性分支测试报告-retain-feature-branches-test-report.md) | 2026-10-29 | `feat/F003-retain-feature-branches` | 规则、链接、27 项测试和分析通过；合并后分支保留验证通过 |
