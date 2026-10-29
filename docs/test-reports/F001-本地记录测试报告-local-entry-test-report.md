@@ -1,7 +1,7 @@
 # F001：本地文字记录测试报告
 
-- 关联需求：[F001-local-entry](../features/F001-local-entry.md)
-- 关联计划：[开发计划](../features/F001-local-entry-plan.md)
+- 关联需求：[F001 本地记录](../features/F001-本地记录-local-entry.md)
+- 关联计划：[开发计划](../features/F001-本地记录计划-local-entry-plan.md)
 - 代码状态：2026-10-28 当前工作区；未初始化 Git，没有提交 SHA。
 - 本报告区分宿主自动化验证、Android 构建和真机验收。
 
@@ -60,6 +60,17 @@
 
 当前没有连接 Android 设备，自动化测试没有替代上述验证。F001 暂不标记“已完成”。
 
+### 2026-10-29 待办与设备检查
+
+- [ ] 使 ADB 能正常列出 Android 设备：当前执行 `flutter devices` 时，ADB 报 `Cannot mkdir '\.android': Permission denied`；项目内已配置 `ANDROID_USER_HOME`，单次设置 `ANDROID_SDK_HOME` 后仍复现。PowerShell 脚本执行策略可通过仅对该进程使用 `-ExecutionPolicy Bypass` 运行，不是设备验收本身的结果。
+- [ ] 连接 Android 真机并启用 USB 调试，或安装并启动 Android 模拟器；当前项目 SDK 未安装 emulator 组件。
+- [ ] 按下列步骤执行设备验收，记录设备型号、Android 版本、APK 标识、逐项实际结果及缺陷复测结果。
+- [x] 整理已纳入版本控制的 `client/test/ui/zz_probe*_test.dart` 与 `client/test/zz_probe_temp_test.dart` 探针：详情页探针先返回主页再点击记录入口；启动探针改用同步临时目录，并只验证仓储延迟打开，避免在组件虚拟异步环境中等待文件 I/O。全量 27 项测试通过。
+- [x] 修正探针文件的两处静态分析问题：移除多余和未使用的导入；`flutter analyze` 通过，0 问题。
+- [ ] 完成设备验收后更新本报告与功能台账；在此之前维持“待测试”。
+
+本轮已完成的下一步：使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ..\scripts\flutter.ps1` 运行测试与分析。原有三个正式测试文件共 17 项通过；整理探针后，全量 27 项测试通过、退出码 0；`flutter analyze` 显示 `No issues found`、退出码 0。此次未重新构建 APK，也未完成设备验收。
+
 连接设备后的验收步骤：
 
 1. 安装本次调试 APK，确认打开进入文字记录页。
@@ -82,4 +93,4 @@
 
 ## 当前结论
 
-17 项自动化测试、静态分析和 Android 调试 APK 构建通过；设备验收尚未执行。正式签名发布、隐私政策和上架审核不在本次交付范围。
+全量 27 项自动化测试与静态分析在 2026-10-29 通过；此前 Android 调试 APK 构建通过。ADB 配置目录权限问题和 Android 设备验收仍待处理，因此 F001 维持“待测试”。正式签名发布、隐私政策和上架审核不在本次交付范围。

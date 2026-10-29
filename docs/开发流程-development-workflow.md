@@ -26,7 +26,7 @@
 
 ## 3. 功能编号和状态
 
-- 新功能从 `F001` 开始递增，在 [功能任务台账](features/README.md) 登记。编号一经分配不复用，名称使用简短英文主题。
+- 新功能从 `F001` 开始递增，在 [功能任务台账](features/README.md) 登记。编号一经分配不复用，文件名同时使用简短、语义对应的中文主题和英文主题。
 - 状态在台账统一维护：`待明确 → 待开发 → 开发中 → 待测试 → 待验收 → 已完成`。
 - 关键依赖未满足时标为 `阻塞`，说明原因与恢复条件；取消的功能保留记录，标为 `已取消`。
 - 测试发现问题回到 `开发中`，修复后重新进入 `待测试`。未执行测试不写“通过”，等待真机或用户体验时不写“已完成”。
@@ -34,18 +34,18 @@
 
 ## 4. 文件命名
 
-统一使用英文小写单词和连字符；功能编号 `F001`、固定入口 `README.md` 与 `AGENTS.md` 例外。中文用于标题和正文。
+除固定入口 `README.md`、`AGENTS.md`、`CLAUDE.md` 外，Markdown 文件名同时包含语义对应的中文主题和英文主题，格式为 `<中文主题>-<english-topic>.md`。英文主题统一使用小写单词和连字符；功能编号 `F001` 保留在最前面。
 
 | 类型 | 位置与命名规则 | 示例（仅示例，未立项） |
 |---|---|---|
-| 稳定的项目级文档 | `docs/<明确主题>.md` | `product-design.md`、`development-workflow.md` |
-| 功能需求、方案与任务 | `docs/features/F编号-主题.md` | `F001-entry-autosave.md` |
-| 功能测试报告 | `docs/test-reports/F编号-主题-test-report.md` | `F001-entry-autosave-test-report.md` |
-| 大型功能需独立的详细计划（可选） | `docs/features/F编号-主题-plan.md` | `F004-cloud-sync-plan.md` |
-| 发布记录（发布时创建目录） | `docs/releases/v版本-release-notes.md` | `v0.1.0-release-notes.md` |
-| 模板 | `docs/templates/用途-template.md` | `feature-spec-template.md` |
+| 稳定的项目级文档 | `docs/<中文主题>-<english-topic>.md` | `产品设计-product-design.md`、`开发流程-development-workflow.md` |
+| 功能需求、方案与任务 | `docs/features/F编号-<中文主题>-<english-topic>.md` | `F001-本地记录-local-entry.md` |
+| 功能测试报告 | `docs/test-reports/F编号-<中文主题>测试报告-<english-topic>-test-report.md` | `F001-本地记录测试报告-local-entry-test-report.md` |
+| 大型功能需独立的详细计划（可选） | `docs/features/F编号-<中文主题>计划-<english-topic>-plan.md` | `F004-云同步计划-cloud-sync-plan.md` |
+| 发布记录（发布时创建目录） | `docs/releases/v版本-发布说明-release-notes.md` | `v0.1.0-发布说明-release-notes.md` |
+| 模板 | `docs/templates/<中文用途>模板-<english-purpose>-template.md` | `功能需求模板-feature-spec-template.md` |
 
-- 同一功能在需求、计划、测试报告中使用相同编号和主题，不另起别名。
+- 同一功能在需求、计划、测试报告中使用相同编号及中英文主题，不另起别名；中英文主题表达相同含义。
 - 长期维护的文档不在文件名中堆日期，正文记录更新时间。测试每一轮注明日期与被测版本，保留历史结果。
 - 不使用 `notes.md`、`new.md`、`final.md`、`test1.md` 等无法辨识用途的名称。
 - 未来采用 Git 后，分支可使用 `feat/F001-entry-autosave`；提交示例为 `feat(F001): add local autosave`。当前不假定仓库已初始化。
@@ -64,7 +64,7 @@
 
 ## 6. 如何参考开源项目
 
-1. 在 [功能参考索引](feature-reference-index.md) 选择首选仓库，只查本次相关模块。
+1. 在 [功能参考索引](功能参考索引-feature-reference-index.md) 选择首选仓库，只查本次相关模块。
 2. 需要借鉴具体逻辑时记录提交 SHA、源码永久链接、关键流程与异常分支。
 3. 写出与本项目数据模型、平台依赖和协议的差异，再决定采用方式。
 4. 直接复用源码时核对具体代码及依赖、模型、素材许可，保留所需声明。
@@ -98,6 +98,6 @@
 
 ## 9. 发布记录最少包含什么
 
-发布时创建 `docs/releases/v版本-release-notes.md`：版本号、日期、代码版本、构建产物标识、本次功能编号、关联测试报告、升级与数据迁移说明、已知限制、回退或恢复办法、上架检查结果以及发布状态。
+发布时创建 `docs/releases/v版本-发布说明-release-notes.md`：版本号、日期、代码版本、构建产物标识、本次功能编号、关联测试报告、升级与数据迁移说明、已知限制、回退或恢复办法、上架检查结果以及发布状态。
 
 涉及数据库迁移时，先验证备份与恢复；不要承诺旧安装包一定能读取新数据库。部署和提审按用户在当前会话中的授权范围执行，准备工作可先完成。

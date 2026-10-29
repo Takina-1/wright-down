@@ -2,9 +2,9 @@
 
 > 状态：架构设计完成（讨论于 2026-10-24）
 > 定位：B 生活流回顾 + C 语音优先
-> 配套文档：[OPPO 上架合规清单](oppo-release-checklist.md)
-> 开发入口：[文档总索引](README.md) · [开发流程](development-workflow.md)
-> 本文保留原始设计决策；后续调整建议见 [功能参考索引](feature-reference-index.md)，采用时需同步更新本文。
+> 配套文档：[OPPO 上架合规清单](OPPO上架清单-oppo-release-checklist.md)
+> 开发入口：[文档总索引](README.md) · [开发流程](开发流程-development-workflow.md)
+> 本文保留原始设计决策；后续调整建议见 [功能参考索引](功能参考索引-feature-reference-index.md)，采用时需同步更新本文。
 
 ---
 
@@ -13,7 +13,7 @@
 ### 当前技术落地（2026-10-28）
 - F001 按用户“继续”指令采用 Flutter + Dart 开发 Android 客户端，SQLite 使用 sqflite。
 - 代码采用 `client/lib/src/` 分层，测试位于 `client/test/`；服务端技术尚未选择。
-- F001 范围、临时开发名称、条目边界与验收标准以 [功能需求](features/F001-local-entry.md) 为准；其他待定建议未自动转为已决定。
+- F001 范围、临时开发名称、条目边界与验收标准以 [功能需求](features/F001-本地记录-local-entry.md) 为准；其他待定建议未自动转为已决定。
 
 ### 1. 定位
 - **B（回顾）+ C（语音）** 组合

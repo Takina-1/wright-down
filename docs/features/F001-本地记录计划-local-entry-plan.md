@@ -5,7 +5,7 @@
 目标：实现 F001 本地文字记录与回顾闭环。
 架构：纯 Dart Domain 接口；SQLite LocalRepo；UI 控制器协调串行保存与界面状态。
 技术：Flutter stable、Dart、sqflite、path、uuid；sqflite_common_ffi 用于宿主数据库测试。
-需求：[F001-local-entry.md](F001-local-entry.md)。
+需求：[F001 本地记录](F001-本地记录-local-entry.md)。
 
 ## 全局约束与复核重点
 

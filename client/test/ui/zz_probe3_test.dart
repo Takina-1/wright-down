@@ -28,6 +28,8 @@ void main() {
       'PROBE C2b localizations=${Localizations.of(ctx, MaterialLocalizations).runtimeType}',
     );
     // Show the rendered context menu labels for the entry field.
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tab-write')));
     await tester.pumpAndSettle();
     final ctx2 = tester.element(find.byKey(const Key('entry-content')));

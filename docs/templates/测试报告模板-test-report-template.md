@@ -1,8 +1,8 @@
 # F编号：功能名称测试报告
 
-> 模板：复制到 `docs/test-reports/F编号-主题-test-report.md` 后填写。保留每轮结果；以下字段都不是已执行证据。
+> 模板：复制到 `docs/test-reports/F编号-中文主题测试报告-english-topic-test-report.md` 后填写。保留每轮结果；以下字段都不是已执行证据。
 
-- 关联需求：填写 `../features/F编号-主题.md` 的实际链接
+- 关联需求：填写 `../features/F编号-中文主题-english-topic.md` 的实际链接
 - 测试依据：需求验收标准及其版本／日期
 
 ## 第 1 轮：执行日期待填写

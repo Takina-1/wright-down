@@ -2,7 +2,7 @@
 
 Flutter Android 开发预览版：本地文字记录、停输 1 秒自动保存、按月分组的回顾列表与已有记录编辑。
 
-入口：[环境与命令](../docs/development-environment.md) · [F001 需求](../docs/features/F001-local-entry.md) · [计划](../docs/features/F001-local-entry-plan.md) · [测试报告](../docs/test-reports/F001-local-entry-test-report.md)。
+入口：[环境与命令](../docs/开发环境-development-environment.md) · [F001 需求](../docs/features/F001-本地记录-local-entry.md) · [计划](../docs/features/F001-本地记录计划-local-entry-plan.md) · [测试报告](../docs/test-reports/F001-本地记录测试报告-local-entry-test-report.md)。
 
 在当前 `client` 目录运行：
 

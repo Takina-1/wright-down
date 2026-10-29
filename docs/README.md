@@ -4,19 +4,20 @@
 
 | 要了解什么 | 查阅入口 | 文档职责 |
 |---|---|---|
-| 如何运行、测试和构建项目 | [开发环境](development-environment.md) | 已安装工具版本、环境脚本与实际命令 |
-| 产品做什么、架构有哪些约束 | [产品与架构设计](product-design.md) | 产品范围与跨功能的架构决策 |
-| 需求如何进入开发、如何测试与交付 | [开发流程与命名规范](development-workflow.md) | 工作步骤、状态、命名、完成标准 |
+| 如何运行、测试和构建项目 | [开发环境](开发环境-development-environment.md) | 已安装工具版本、环境脚本与实际命令 |
+| 如何连接 Android 设备并调试 | [Android 调试与设备验收](安卓调试-android-debugging.md) | 真机连接、运行、日志、ADB 排障与 F001 验收步骤 |
+| 产品做什么、架构有哪些约束 | [产品与架构设计](产品设计-product-design.md) | 产品范围与跨功能的架构决策 |
+| 需求如何进入开发、如何测试与交付 | [开发流程与命名规范](开发流程-development-workflow.md) | 工作步骤、状态、命名、完成标准 |
 | 现在有哪些功能、进展到哪一步 | [功能任务台账](features/README.md) | 每个功能唯一编号、需求入口与状态 |
-| 某个功能参考哪个项目、看什么逻辑 | [功能实现参考索引](feature-reference-index.md) | 按功能选择参考实现，记录适配方向 |
-| 仓库地址、技术栈与许可是什么 | [开源仓库资料](open-source-repositories.md) | 来源事实、许可证与未核实事项 |
+| 某个功能参考哪个项目、看什么逻辑 | [功能实现参考索引](功能参考索引-feature-reference-index.md) | 按功能选择参考实现，记录适配方向 |
+| 仓库地址、技术栈与许可是什么 | [开源仓库资料](开源仓库-open-source-repositories.md) | 来源事实、许可证与未核实事项 |
 | 功能是否通过测试、还有什么问题 | [测试报告索引](test-reports/README.md) | 测试环境、结果、缺陷与限制 |
-| 如何准备 OPPO 上架 | [OPPO 上架合规清单](oppo-release-checklist.md) | 上架准备，提审前核对官方规则 |
+| 如何准备 OPPO 上架 | [OPPO 上架合规清单](OPPO上架清单-oppo-release-checklist.md) | 上架准备，提审前核对官方规则 |
 
 ## 新功能使用的模板
 
-- [功能需求与开发方案模板](templates/feature-spec-template.md)：需求、验收标准、实现方案、任务和测试计划写在同一份文档。
-- [测试报告模板](templates/test-report-template.md)：记录实际执行结果，与功能编号对应。
+- [功能需求与开发方案模板](templates/功能需求模板-feature-spec-template.md)：需求、验收标准、实现方案、任务和测试计划写在同一份文档。
+- [测试报告模板](templates/测试报告模板-test-report-template.md)：记录实际执行结果，与功能编号对应。
 
 模板和命名示例不代表已经立项、开发或测试。当前已建立 Flutter Android 工程，F001 的实施及验收进度见功能台账。
 

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/app.dart';
-import 'package:local_diary/src/domain/entry.dart';
 
 import '../support/memory_repository.dart';
 

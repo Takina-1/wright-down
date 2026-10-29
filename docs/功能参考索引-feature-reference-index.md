@@ -4,7 +4,7 @@
 
 用途：开发某个功能前，先在这里查「看谁 → 搜什么 → 借鉴什么逻辑 → 如何适配 → 如何验证」。
 
-配套：[产品与架构设计](product-design.md) · [仓库资料与许可证](open-source-repositories.md) · [上架合规清单](oppo-release-checklist.md) · [开发流程](development-workflow.md)。
+配套：[产品与架构设计](产品设计-product-design.md) · [仓库资料与许可证](开源仓库-open-source-repositories.md) · [上架合规清单](OPPO上架清单-oppo-release-checklist.md) · [开发流程](开发流程-development-workflow.md)。
 
 ## 使用约定
 

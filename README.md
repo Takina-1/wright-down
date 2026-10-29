@@ -24,9 +24,10 @@ server/
 deploy/                 Docker Compose、Nginx 等部署配置
 docs/                   产品设计、开发流程、功能需求、测试报告与参考资料
 AGENTS.md               AI 开发助手的项目工作约定
+CLAUDE.md               Claude 开发助手的项目工作约定
 ```
 
-客户端已初始化为 Flutter Android 工程，F001 实现本地文字记录、自动保存和回顾列表。服务器暂未实现。开发工具与运行命令见 [开发环境说明](docs/development-environment.md)，验收状态以功能台账和测试报告为准。
+客户端已初始化为 Flutter Android 工程，F001 实现本地文字记录、自动保存和回顾列表。服务器暂未实现。开发工具与运行命令见 [开发环境说明](docs/开发环境-development-environment.md)，验收状态以功能台账和测试报告为准。
 
 在 PowerShell 中运行检查：
 
@@ -39,7 +40,7 @@ Set-Location client
 
 连接开启 USB 调试的 Android 设备后，使用 `..\scripts\flutter.ps1 devices` 查看设备，再执行 `..\scripts\flutter.ps1 run -d <设备ID>`。
 
-当前已构建的调试包：`client/build/app/outputs/flutter-apk/app-debug.apk`。具体测试结果、校验值和手机验收步骤见 [F001 测试报告](docs/test-reports/F001-local-entry-test-report.md)。
+当前已构建的调试包：`client/build/app/outputs/flutter-apk/app-debug.apk`。具体测试结果、校验值和手机验收步骤见 [F001 测试报告](docs/test-reports/F001-本地记录测试报告-local-entry-test-report.md)。
 
 ## 架构约定
 
@@ -54,11 +55,11 @@ Set-Location client
 
 从 [文档总索引](docs/README.md) 开始。流程为：明确需求与验收标准 → 查询参考实现 → 拆分任务并开发 → 测试与修复 → 验收归档 → 发布。
 
-- [开发流程与命名规范](docs/development-workflow.md)
-- [开发环境与实际命令](docs/development-environment.md)
+- [开发流程与命名规范](docs/开发流程-development-workflow.md)
+- [开发环境与实际命令](docs/开发环境-development-environment.md)
 - [功能任务台账](docs/features/README.md)
 - [测试报告索引](docs/test-reports/README.md)
-- [产品与架构设计](docs/product-design.md)
-- [功能实现参考索引：开发某个功能先查谁、套用什么逻辑](docs/feature-reference-index.md)
-- [开源仓库资料](docs/open-source-repositories.md)
-- [OPPO 上架合规清单](docs/oppo-release-checklist.md)
+- [产品与架构设计](docs/产品设计-product-design.md)
+- [功能实现参考索引：开发某个功能先查谁、套用什么逻辑](docs/功能参考索引-feature-reference-index.md)
+- [开源仓库资料](docs/开源仓库-open-source-repositories.md)
+- [OPPO 上架合规清单](docs/OPPO上架清单-oppo-release-checklist.md)
