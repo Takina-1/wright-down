@@ -829,7 +829,7 @@ void main() {
         entry('new', '会被回滚'),
         entry('', '缺少 ID'),
       ]),
-      throwsA(anything),
+      throwsArgumentError,
     );
     final stored = await repo.list();
     expect(stored, hasLength(1));
