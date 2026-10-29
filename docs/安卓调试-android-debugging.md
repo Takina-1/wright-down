@@ -94,6 +94,11 @@ $adbPath = 'D:\dev\myapp\.tooling\android-sdk\platform-tools\adb.exe'
 
 若错误仍然存在，保存上述命令的完整输出，并检查当前 PowerShell 用户是否能写入 `D:\dev\myapp\.local`。不要把设备验收标为通过。
 
+### 2026-10-29 实测
+
+该权限错误在本机不再复现：`adb devices -l` 可直接列出设备并返回 `device` 状态。2026-10-29 晚在 OnePlus PLZ110（Android 16 / SDK 36）上完成了 F001 与 F004 的真机验收，结果见对应的测试报告。设备信息可用 `adb shell getprop ro.build.version.release` 与 `ro.product.model` 取得。
+
+
 ## 7. 提交调试结果
 
 设备验收完成后：
