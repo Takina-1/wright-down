@@ -37,7 +37,7 @@ void main() {
       [
         entry('a', '较早的一条', createdAt: DateTime(2026, 10, 28, 9, 12)),
         entry('b', '较晚的一条', createdAt: DateTime(2026, 10, 28, 10, 5)),
-        entry('c', '第二天的一条', createdAt: DateTime(2026, 10, 29, 7, 0)),
+        entry('c', '第二天的一条', createdAt: DateTime(2026, 10, 29, 7, 0), dayKey: '2026-10-29'),
       ],
       exportedAt: DateTime.utc(2026, 10, 29, 4),
     );
