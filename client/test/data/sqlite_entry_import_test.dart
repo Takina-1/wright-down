@@ -60,11 +60,27 @@ void main() {
   });
 
   test('a new id from a backup is inserted', () async {
-    final summary = await repo.importAll([entry('a', '来自备份')]);
+    final backupCreated = DateTime.utc(2026, 10, 25, 6, 30);
+    final summary = await repo.importAll([
+      entry(
+        'a',
+        '来自备份',
+        createdAt: backupCreated,
+        updatedAt: backupCreated,
+        dayKey: '2026-10-25',
+      ),
+    ]);
     expect(summary.inserted, 1);
     expect(summary.updated, 0);
     expect(summary.skipped, 0);
-    expect((await repo.list()).single.content, '来自备份');
+    final stored = (await repo.list()).single;
+    expect(stored.content, '来自备份');
+    // 插入路径使用备份中的全部字段：ID、创建时间与 dayKey 都跟备份一致，
+    // 不能用本地默认值，也不能沿用本机的日期分组。
+    expect(stored.id, 'a');
+    expect(stored.createdAt, backupCreated);
+    expect(stored.updatedAt, backupCreated);
+    expect(stored.dayKey, '2026-10-25');
   });
 
   test(
@@ -140,4 +156,21 @@ void main() {
     expect(stored, hasLength(1));
     expect(stored.single.id, 'keep');
   });
+
+  test(
+    'an entry with a malformed day key rolls the whole import back',
+    () async {
+      await repo.save(entry('keep', '保留这条'));
+      await expectLater(
+        repo.importAll([
+          entry('new', '会被回滚'),
+          entry('bad', '日期键不合法', dayKey: '2026'),
+        ]),
+        throwsArgumentError,
+      );
+      final stored = await repo.list();
+      expect(stored, hasLength(1));
+      expect(stored.single.id, 'keep');
+    },
+  );
 }

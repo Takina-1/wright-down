@@ -82,7 +82,7 @@ class BackupCodec {
         content is! String ||
         content.trim().isEmpty ||
         dayKey is! String ||
-        dayKey.isEmpty) {
+        !isValidDayKey(dayKey)) {
       throw const BackupFormatException('备份文件已损坏，无法恢复');
     }
     return Entry(

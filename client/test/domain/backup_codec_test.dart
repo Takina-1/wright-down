@@ -179,4 +179,29 @@ void main() {
       );
     }
   });
+
+  test('an entry with a malformed day key is reported as damaged', () {
+    // 其余字段全部合法，失败原因唯一指向 dayKey 的格式。
+    String backupWith(String dayKey) =>
+        '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entries":[{"id":"a","content":"正文",'
+        '"createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z",'
+        '"dayKey":"$dayKey"}]}';
+
+    for (final bad in ['2026', 'x', '2026-10', '2026-10-28T00:00:00Z']) {
+      expect(
+        () => codec.decode(backupWith(bad)),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '备份文件已损坏，无法恢复',
+          ),
+        ),
+        reason: 'dayKey "$bad" 必须被整体拒绝',
+      );
+    }
+  });
 }

@@ -15,6 +15,10 @@ ImportSummary mergeEntries(Map<String, Entry> store, List<Entry> incoming) {
     if (entry.id.isEmpty) {
       throw ArgumentError('An imported entry needs an id');
     }
+    // 与生产仓储一致：dayKey 不合法就整体拒绝导入。
+    if (!isValidDayKey(entry.dayKey)) {
+      throw ArgumentError('An imported entry needs a valid day key');
+    }
     final existing = pending[entry.id] ?? store[entry.id];
     if (existing == null) {
       pending[entry.id] = entry;

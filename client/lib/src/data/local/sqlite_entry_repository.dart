@@ -109,6 +109,11 @@ class SqliteEntryRepository implements LocalEntryRepository {
         if (entry.id.isEmpty) {
           throw ArgumentError('An imported entry needs an id');
         }
+        // dayKey 必须是合法日期键：它决定了时间轴的月份分组，
+        // 脏数据会让回顾页按字符串切月时崩溃。
+        if (!isValidDayKey(entry.dayKey)) {
+          throw ArgumentError('An imported entry needs a valid day key');
+        }
         final rows = await txn.query(
           'entries',
           columns: ['updated_at'],

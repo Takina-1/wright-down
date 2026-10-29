@@ -29,6 +29,19 @@ void main() {
     expect(store, isEmpty);
   });
 
+  test('an entry with a malformed day key aborts the whole merge', () {
+    final store = <String, Entry>{'keep': entry('keep')};
+    final bad = Entry(
+      id: 'bad',
+      content: '日期键不合法',
+      createdAt: time,
+      updatedAt: time,
+      dayKey: '2026',
+    );
+    expect(() => mergeEntries(store, [entry('new'), bad]), throwsArgumentError);
+    expect(store.keys, ['keep']);
+  });
+
   test('the merge compares update times at millisecond precision', () {
     final store = <String, Entry>{'a': entry('a')};
     final summary = mergeEntries(store, [
