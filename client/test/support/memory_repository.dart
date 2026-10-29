@@ -11,6 +11,7 @@ class MemoryRepository implements LocalEntryRepository {
   int saves = 0;
   bool failSave = false;
   bool failList = false;
+  bool failImport = false;
   Completer<void>? gate;
 
   @override
@@ -53,8 +54,10 @@ class MemoryRepository implements LocalEntryRepository {
   }
 
   @override
-  Future<ImportSummary> importAll(List<Entry> incoming) async =>
-      mergeEntries(entries, incoming);
+  Future<ImportSummary> importAll(List<Entry> incoming) async {
+    if (failImport) throw StateError('simulated import failure');
+    return mergeEntries(entries, incoming);
+  }
 
   @override
   Future<void> close() async {}
