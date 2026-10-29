@@ -76,7 +76,27 @@ void main() {
   test('an entry with a missing field is reported as damaged', () {
     const broken = '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
-        '"entries":[{"id":"a","content":"正文"}]}';
+        '"entries":[{"id":"a","content":"正文",'
+        '"createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z"}]}';
+    expect(
+      () => codec.decode(broken),
+      throwsA(
+        isA<BackupFormatException>().having(
+          (e) => e.reason,
+          'reason',
+          '备份文件已损坏，无法恢复',
+        ),
+      ),
+    );
+  });
+
+  test('a backup without an export time is reported as damaged', () {
+    const broken = '{"format":"local-diary-backup","version":1,'
+        '"entries":[{"id":"a","content":"正文",'
+        '"createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z",'
+        '"dayKey":"2026-10-28"}]}';
     expect(
       () => codec.decode(broken),
       throwsA(
