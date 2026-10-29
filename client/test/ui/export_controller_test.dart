@@ -140,6 +140,40 @@ void main() {
     expect(controller.message, '导出失败，请检查存储空间后重试');
   });
 
+  test('a failed export leaves nothing to share', () async {
+    final repo = MemoryRepository();
+    final gateway = FakeFileGateway();
+    final controller = ExportController(repository: repo, fileGateway: gateway);
+
+    // 先成功导出一次，让「分享」入口出现。
+    await controller.exportBackup();
+    expect(controller.canShare, isTrue);
+
+    // 之后的一次导出失败，不能让人分享到上一次的旧文件。
+    gateway.failSave = true;
+    final ok = await controller.exportBackup();
+
+    expect(ok, isFalse);
+    expect(controller.canShare, isFalse);
+    expect(await controller.shareLastExport(), isFalse);
+    expect(gateway.sharedName, isNull);
+  });
+
+  test('a cancelled export leaves nothing to share', () async {
+    final repo = MemoryRepository();
+    final gateway = FakeFileGateway();
+    final controller = ExportController(repository: repo, fileGateway: gateway);
+
+    await controller.exportBackup();
+    expect(controller.canShare, isTrue);
+
+    gateway.cancelSave = true;
+    final ok = await controller.exportBackup();
+
+    expect(ok, isFalse);
+    expect(controller.canShare, isFalse);
+  });
+
   test('a markdown export is offered for sharing after it is saved', () async {
     final repo = MemoryRepository();
     repo.entries['a'] = entry('a', '第一条');

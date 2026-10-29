@@ -76,11 +76,15 @@ class ExportController extends ChangeNotifier {
   }) async {
     _status = ExportStatus.working;
     _message = null;
+    // 上一次导出的内容不再作数：失败或取消后不能留着「分享」入口，
+    // 否则用户可能分享到上一次的旧文件。
+    _lastExportBytes = null;
+    _lastExportName = null;
     _notify();
     try {
       final entries = await repository.exportAll();
       final bytes = Uint8List.fromList(utf8.encode(encode(entries)));
-      final name = '本地日记-${_stamp()}.$extension';
+      final name = '$kExportFilePrefix${_stamp()}.$extension';
       final saved = await fileGateway.saveFile(
         suggestedName: name,
         bytes: bytes,
