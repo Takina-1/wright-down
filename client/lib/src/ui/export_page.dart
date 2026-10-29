@@ -80,7 +80,9 @@ class _ExportPageState extends State<ExportPage> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
-                '备份文件是明文，内容可以用任何文本编辑器打开。'
+                key: const Key('export-plaintext-note'),
+                '备份文件和 Markdown 文件都是明文，不做加密，'
+                '内容可以用任何文本编辑器打开。'
                 '请存放在你自己信任的位置，并注意分享给他人时同样会被看到。',
                 style: TextStyle(
                   fontSize: 15,

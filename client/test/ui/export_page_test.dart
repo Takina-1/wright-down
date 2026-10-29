@@ -53,7 +53,7 @@ void main() {
     dayKey: '2026-10-28',
   );
 
-  testWidgets('the page explains that backups stay readable by others', (
+  testWidgets('the page explains that both exports are plaintext', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -65,7 +65,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('明文'), findsWidgets);
+
+    final note = tester.widget<Text>(
+      find.byKey(const Key('export-plaintext-note')),
+    );
+    expect(note.data, contains('备份文件'));
+    expect(note.data, contains('Markdown'));
+    expect(note.data, contains('明文'));
+    expect(note.data, contains('不做加密'));
   });
 
   testWidgets('exporting a backup shows the exported count', (tester) async {
