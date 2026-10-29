@@ -34,9 +34,5 @@ ImportSummary mergeEntries(Map<String, Entry> store, List<Entry> incoming) {
     }
   }
   store.addAll(pending);
-  return ImportSummary(
-    inserted: inserted,
-    updated: updated,
-    skipped: skipped,
-  );
+  return ImportSummary(inserted: inserted, updated: updated, skipped: skipped);
 }

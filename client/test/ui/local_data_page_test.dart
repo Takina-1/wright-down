@@ -38,9 +38,7 @@ class RecordingFileGateway implements FileGateway {
 }
 
 void main() {
-  testWidgets('the mine page opens the export and backup page', (
-    tester,
-  ) async {
+  testWidgets('the mine page opens the export and backup page', (tester) async {
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -101,9 +99,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: LocalDataPage(repository: MemoryRepository()),
-        ),
+        home: Scaffold(body: LocalDataPage(repository: MemoryRepository())),
       ),
     );
     await tester.pumpAndSettle();
@@ -111,9 +107,7 @@ void main() {
     await tester.tap(find.text('本地数据说明'));
     await tester.pumpAndSettle();
 
-    final note = tester.widget<Text>(
-      find.byKey(const Key('local-data-note')),
-    );
+    final note = tester.widget<Text>(find.byKey(const Key('local-data-note')));
     expect(note.data, contains('备份文件'));
     expect(note.data, contains('Markdown'));
     expect(note.data, contains('明文'));

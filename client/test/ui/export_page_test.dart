@@ -115,10 +115,9 @@ void main() {
     tester,
   ) async {
     final repo = MemoryRepository();
-    final backup = const BackupCodec().encode(
-      [entry('b', '备份新增')],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('b', '备份新增'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     await tester.pumpWidget(
@@ -145,10 +144,9 @@ void main() {
     tester,
   ) async {
     final repo = MemoryRepository();
-    final backup = const BackupCodec().encode(
-      [entry('c', '不该写入')],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('c', '不该写入'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     await tester.pumpWidget(

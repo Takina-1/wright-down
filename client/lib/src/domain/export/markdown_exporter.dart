@@ -6,13 +6,14 @@ class MarkdownExporter {
 
   String render(List<Entry> entries, {DateTime? exportedAt}) {
     final stamp = (exportedAt ?? DateTime.now()).toUtc().toIso8601String();
-    final sorted = [...entries]..sort((a, b) {
-      final byDay = b.dayKey.compareTo(a.dayKey);
-      if (byDay != 0) return byDay;
-      final byTime = b.createdAt.compareTo(a.createdAt);
-      if (byTime != 0) return byTime;
-      return b.id.compareTo(a.id);
-    });
+    final sorted = [...entries]
+      ..sort((a, b) {
+        final byDay = b.dayKey.compareTo(a.dayKey);
+        if (byDay != 0) return byDay;
+        final byTime = b.createdAt.compareTo(a.createdAt);
+        if (byTime != 0) return byTime;
+        return b.id.compareTo(a.id);
+      });
     final buffer = StringBuffer()
       ..writeln('---')
       ..writeln('exportedAt: $stamp')

@@ -62,7 +62,9 @@ void main() {
 
   test('a newer backup version asks the user to update the app', () {
     expect(
-      () => codec.decode('{"format":"local-diary-backup","version":2,"entries":[]}'),
+      () => codec.decode(
+        '{"format":"local-diary-backup","version":2,"entries":[]}',
+      ),
       throwsA(
         isA<BackupFormatException>().having(
           (e) => e.reason,
@@ -74,7 +76,8 @@ void main() {
   });
 
   test('an entry with a missing field is reported as damaged', () {
-    const broken = '{"format":"local-diary-backup","version":1,'
+    const broken =
+        '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
@@ -92,7 +95,8 @@ void main() {
   });
 
   test('a backup without an export time is reported as damaged', () {
-    const broken = '{"format":"local-diary-backup","version":1,'
+    const broken =
+        '{"format":"local-diary-backup","version":1,'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z",'
@@ -110,7 +114,8 @@ void main() {
   });
 
   test('an entry with a wrong field type is reported as damaged', () {
-    const broken = '{"format":"local-diary-backup","version":1,'
+    const broken =
+        '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":42,"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
@@ -127,7 +132,8 @@ void main() {
   });
 
   test('a backup with duplicated ids is reported as damaged', () {
-    const duplicated = '{"format":"local-diary-backup","version":1,'
+    const duplicated =
+        '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
@@ -150,11 +156,13 @@ void main() {
   });
 
   test('an entry with blank content is reported as damaged', () {
-    const empty = '{"format":"local-diary-backup","version":1,'
+    const empty =
+        '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":"","createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
-    const whitespace = '{"format":"local-diary-backup","version":1,'
+    const whitespace =
+        '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":"   \\n  ","createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';

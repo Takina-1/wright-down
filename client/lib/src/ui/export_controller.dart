@@ -21,7 +21,7 @@ class ExportController extends ChangeNotifier {
     this._codec = const BackupCodec(),
     this._markdownExporter = const MarkdownExporter(),
     DateTime Function()? now,
-  })  : _now = now ?? DateTime.now;
+  }) : _now = now ?? DateTime.now;
 
   final LocalEntryRepository repository;
   final FileGateway fileGateway;

@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/data/local/sqlite_entry_repository.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-// TEMPORARY PROBE - mirrors client/lib/main.dart _Startup exactly, except the
-// db path is injected so it can point at an unopenable location.
+// 守护「数据库打不开时错误只在实际使用时暴露，不在启动阶段误报」这一行为：
+// 镜像 client/lib/main.dart 的 _Startup，只是把数据库路径换成无法打开的位置。
 class ProbeStartup extends StatefulWidget {
   const ProbeStartup({super.key, required this.dbPath});
   final String dbPath;
@@ -16,10 +16,8 @@ class ProbeStartup extends StatefulWidget {
 
 class _ProbeStartupState extends State<ProbeStartup> {
   late Future<SqliteEntryRepository> _repository = _open();
-  Future<SqliteEntryRepository> _open() async => SqliteEntryRepository(
-    factory: databaseFactoryFfi,
-    path: widget.dbPath,
-  );
+  Future<SqliteEntryRepository> _open() async =>
+      SqliteEntryRepository(factory: databaseFactoryFfi, path: widget.dbPath);
 
   @override
   Widget build(BuildContext context) => FutureBuilder<SqliteEntryRepository>(

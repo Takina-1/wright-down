@@ -33,8 +33,7 @@ class BackupCodec {
     } on FormatException {
       throw const BackupFormatException('这不是本应用的备份文件');
     }
-    if (raw is! Map<String, Object?> ||
-        raw['format'] != kBackupFormat) {
+    if (raw is! Map<String, Object?> || raw['format'] != kBackupFormat) {
       throw const BackupFormatException('这不是本应用的备份文件');
     }
     final version = raw['version'];
@@ -78,9 +77,12 @@ class BackupCodec {
     final id = raw['id'];
     final content = raw['content'];
     final dayKey = raw['dayKey'];
-    if (id is! String || id.isEmpty ||
-        content is! String || content.trim().isEmpty ||
-        dayKey is! String || dayKey.isEmpty) {
+    if (id is! String ||
+        id.isEmpty ||
+        content is! String ||
+        content.trim().isEmpty ||
+        dayKey is! String ||
+        dayKey.isEmpty) {
       throw const BackupFormatException('备份文件已损坏，无法恢复');
     }
     return Entry(

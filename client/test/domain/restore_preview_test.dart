@@ -68,17 +68,23 @@ void main() {
     expect(preview.skipped, 1);
   });
 
-  test('a sub-millisecond newer backup entry is skipped like the store does', () {
-    // 与 SQLite 存储层一致：只比较毫秒，同一毫秒内的时间戳一律跳过。
-    final subMillisecond = DateTime.utc(2026, 10, 28, 8, 0, 0, 0, 500);
-    expect(subMillisecond.millisecondsSinceEpoch, base.millisecondsSinceEpoch);
-    final preview = compareRestore(
-      [entry('a', updatedAt: base)],
-      [entry('a', updatedAt: subMillisecond)],
-    );
-    expect(preview.total, 1);
-    expect(preview.inserted, 0);
-    expect(preview.updated, 0);
-    expect(preview.skipped, 1);
-  });
+  test(
+    'a sub-millisecond newer backup entry is skipped like the store does',
+    () {
+      // 与 SQLite 存储层一致：只比较毫秒，同一毫秒内的时间戳一律跳过。
+      final subMillisecond = DateTime.utc(2026, 10, 28, 8, 0, 0, 0, 500);
+      expect(
+        subMillisecond.millisecondsSinceEpoch,
+        base.millisecondsSinceEpoch,
+      );
+      final preview = compareRestore(
+        [entry('a', updatedAt: base)],
+        [entry('a', updatedAt: subMillisecond)],
+      );
+      expect(preview.total, 1);
+      expect(preview.inserted, 0);
+      expect(preview.updated, 0);
+      expect(preview.skipped, 1);
+    },
+  );
 }

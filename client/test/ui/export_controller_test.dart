@@ -99,19 +99,22 @@ void main() {
     expect(document.entries, isEmpty);
   });
 
-  test('the exported file name carries seconds so two exports differ', () async {
-    final repo = MemoryRepository();
-    final gateway = FakeFileGateway();
-    final controller = ExportController(
-      repository: repo,
-      fileGateway: gateway,
-      now: () => DateTime(2026, 10, 28, 8, 5, 3),
-    );
+  test(
+    'the exported file name carries seconds so two exports differ',
+    () async {
+      final repo = MemoryRepository();
+      final gateway = FakeFileGateway();
+      final controller = ExportController(
+        repository: repo,
+        fileGateway: gateway,
+        now: () => DateTime(2026, 10, 28, 8, 5, 3),
+      );
 
-    await controller.exportBackup();
+      await controller.exportBackup();
 
-    expect(gateway.savedName, '本地日记-2026-10-28-08-05-03.json');
-  });
+      expect(gateway.savedName, '本地日记-2026-10-28-08-05-03.json');
+    },
+  );
 
   test('cancelling the save dialog is not reported as a failure', () async {
     final repo = MemoryRepository();
@@ -181,19 +184,25 @@ void main() {
     expect(controller.message, '分享失败，请重试');
   });
 
-  test('picking a broken backup explains the reason and imports nothing', () async {
-    final repo = MemoryRepository();
-    final gateway = FakeFileGateway()
-      ..pickResult = Uint8List.fromList(utf8.encode('不是备份'));
-    final controller = ExportController(repository: repo, fileGateway: gateway);
+  test(
+    'picking a broken backup explains the reason and imports nothing',
+    () async {
+      final repo = MemoryRepository();
+      final gateway = FakeFileGateway()
+        ..pickResult = Uint8List.fromList(utf8.encode('不是备份'));
+      final controller = ExportController(
+        repository: repo,
+        fileGateway: gateway,
+      );
 
-    final preview = await controller.pickBackup();
+      final preview = await controller.pickBackup();
 
-    expect(preview, isNull);
-    expect(controller.status, ExportStatus.failure);
-    expect(controller.message, '这不是本应用的备份文件');
-    expect(repo.entries, isEmpty);
-  });
+      expect(preview, isNull);
+      expect(controller.status, ExportStatus.failure);
+      expect(controller.message, '这不是本应用的备份文件');
+      expect(repo.entries, isEmpty);
+    },
+  );
 
   test('an unreadable picked file reports the read failure message', () async {
     final repo = MemoryRepository();
@@ -223,10 +232,9 @@ void main() {
 
   test('cancelling the picker drops the previously picked backup', () async {
     final repo = MemoryRepository();
-    final backup = const BackupCodec().encode(
-      [entry('b', '备份新增')],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('b', '备份新增'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     final controller = ExportController(repository: repo, fileGateway: gateway);
@@ -262,13 +270,10 @@ void main() {
   test('a picked backup is previewed before it is restored', () async {
     final repo = MemoryRepository();
     repo.entries['a'] = entry('a', '本机内容');
-    final backup = const BackupCodec().encode(
-      [
-        entry('a', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
-        entry('b', '备份新增'),
-      ],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('a', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
+      entry('b', '备份新增'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     final controller = ExportController(repository: repo, fileGateway: gateway);
@@ -291,17 +296,14 @@ void main() {
     repo.entries['c'] = entry('c', '本机更新', updatedAt: newer);
     repo.entries['d'] = entry('d', '本机更新', updatedAt: newer);
     repo.entries['e'] = entry('e', '本机更新', updatedAt: newer);
-    final backup = const BackupCodec().encode(
-      [
-        entry('a', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
-        entry('g', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
-        entry('b', '备份新增'),
-        entry('c', '备份较旧'),
-        entry('d', '备份较旧'),
-        entry('e', '备份较旧'),
-      ],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('a', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
+      entry('g', '备份较新', updatedAt: time.add(const Duration(minutes: 5))),
+      entry('b', '备份新增'),
+      entry('c', '备份较旧'),
+      entry('d', '备份较旧'),
+      entry('e', '备份较旧'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     final controller = ExportController(repository: repo, fileGateway: gateway);
@@ -324,10 +326,9 @@ void main() {
 
   test('a failing import reports the restore failure message', () async {
     final repo = MemoryRepository()..failImport = true;
-    final backup = const BackupCodec().encode(
-      [entry('b', '备份新增')],
-      exportedAt: time,
-    );
+    final backup = const BackupCodec().encode([
+      entry('b', '备份新增'),
+    ], exportedAt: time);
     final gateway = FakeFileGateway()
       ..pickResult = Uint8List.fromList(utf8.encode(backup));
     final controller = ExportController(repository: repo, fileGateway: gateway);
@@ -344,16 +345,22 @@ void main() {
     expect(repo.entries, isEmpty);
   });
 
-  test('a disposed controller does not throw when an export finishes', () async {
-    final repo = MemoryRepository();
-    repo.entries['a'] = entry('a', '第一条');
-    final gateway = FakeFileGateway();
-    final controller = ExportController(repository: repo, fileGateway: gateway);
+  test(
+    'a disposed controller does not throw when an export finishes',
+    () async {
+      final repo = MemoryRepository();
+      repo.entries['a'] = entry('a', '第一条');
+      final gateway = FakeFileGateway();
+      final controller = ExportController(
+        repository: repo,
+        fileGateway: gateway,
+      );
 
-    controller.dispose();
+      controller.dispose();
 
-    await controller.exportBackup();
+      await controller.exportBackup();
 
-    expect(gateway.savedBytes, isNotNull);
-  });
+      expect(gateway.savedBytes, isNotNull);
+    },
+  );
 }
