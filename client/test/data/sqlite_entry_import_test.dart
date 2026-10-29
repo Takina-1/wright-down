@@ -49,9 +49,11 @@ void main() {
   });
 
   test('exportAll orders by creation time, not by id', () async {
-    await repo.save(entry('a', '最新', createdAt: DateTime.utc(2026, 10, 28)));
-    await repo.save(entry('b', '中间', createdAt: DateTime.utc(2026, 10, 27)));
+    // 故意按最旧 → 最新的顺序写入：插入顺序与期望的创建时间倒序相反，
+    // 这样夹具本身就能区分「按插入顺序排序」和「按创建时间排序」。
     await repo.save(entry('c', '最旧', createdAt: DateTime.utc(2026, 10, 26)));
+    await repo.save(entry('b', '中间', createdAt: DateTime.utc(2026, 10, 27)));
+    await repo.save(entry('a', '最新', createdAt: DateTime.utc(2026, 10, 28)));
     final exported = await repo.exportAll();
     expect(exported.map((e) => e.id).toList(), ['a', 'b', 'c']);
     expect(exported.first.id, 'a');
@@ -93,6 +95,23 @@ void main() {
     expect(summary.skipped, 1);
     expect((await repo.list()).single.content, '本机较新');
   });
+
+  test(
+    'a sub-millisecond newer backup entry is skipped, not applied',
+    () async {
+      await repo.save(entry('a', '本机内容', updatedAt: time));
+      final summary = await repo.importAll([
+        entry(
+          'a',
+          '备份内容',
+          updatedAt: time.add(const Duration(microseconds: 500)),
+        ),
+      ]);
+      expect(summary.updated, 0);
+      expect(summary.skipped, 1);
+      expect((await repo.list()).single.content, '本机内容');
+    },
+  );
 
   test(
     'importing the same backup twice changes nothing the second time',
