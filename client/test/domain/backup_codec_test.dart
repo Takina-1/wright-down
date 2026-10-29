@@ -75,6 +75,7 @@ void main() {
 
   test('an entry with a missing field is reported as damaged', () {
     const broken = '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":"正文"}]}';
     expect(
       () => codec.decode(broken),
@@ -90,6 +91,7 @@ void main() {
 
   test('an entry with a wrong field type is reported as damaged', () {
     const broken = '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
         '"entries":[{"id":"a","content":42,"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
     expect(
