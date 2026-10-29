@@ -5,6 +5,8 @@ import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/domain/export/import_summary.dart';
 import 'package:local_diary/src/domain/local_entry_repository.dart';
 
+import '../support/entry_merger.dart';
+
 /// A repository with a realistically slow write (like a real SQLite transaction).
 class SlowRepository implements LocalEntryRepository {
   final Map<String, Entry> entries = {};
@@ -33,35 +35,8 @@ class SlowRepository implements LocalEntryRepository {
   }
 
   @override
-  Future<ImportSummary> importAll(List<Entry> incoming) async {
-    var inserted = 0;
-    var updated = 0;
-    var skipped = 0;
-    for (final entry in incoming) {
-      final existing = entries[entry.id];
-      if (existing == null) {
-        entries[entry.id] = entry;
-        inserted++;
-      } else if (entry.updatedAt.millisecondsSinceEpoch >
-          existing.updatedAt.millisecondsSinceEpoch) {
-        entries[entry.id] = Entry(
-          id: existing.id,
-          content: entry.content,
-          createdAt: existing.createdAt,
-          updatedAt: entry.updatedAt,
-          dayKey: existing.dayKey,
-        );
-        updated++;
-      } else {
-        skipped++;
-      }
-    }
-    return ImportSummary(
-      inserted: inserted,
-      updated: updated,
-      skipped: skipped,
-    );
-  }
+  Future<ImportSummary> importAll(List<Entry> incoming) async =>
+      mergeEntries(entries, incoming);
 
   @override
   Future<void> close() async {}
