@@ -67,7 +67,9 @@ void main() {
         '来自备份',
         createdAt: backupCreated,
         updatedAt: backupCreated,
-        dayKey: '2026-10-25',
+        // 故意让 dayKey 与 createdAt 的本地日期不一致：
+        // 这样断言 dayKey 只能来自备份，无法用 createdAt 重算出来蒙混过关。
+        dayKey: '2026-03-08',
       ),
     ]);
     expect(summary.inserted, 1);
@@ -80,7 +82,7 @@ void main() {
     expect(stored.id, 'a');
     expect(stored.createdAt, backupCreated);
     expect(stored.updatedAt, backupCreated);
-    expect(stored.dayKey, '2026-10-25');
+    expect(stored.dayKey, '2026-03-08');
   });
 
   test(

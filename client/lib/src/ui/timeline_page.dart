@@ -90,9 +90,10 @@ class _TimelinePageState extends State<TimelinePage> {
   String _dayKeyOf(Entry entry) {
     if (isValidDayKey(entry.dayKey)) return entry.dayKey;
     final local = entry.createdAt.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$month-$day';
+    return '$year-$month-$day';
   }
 
   @override
