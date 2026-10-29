@@ -103,4 +103,27 @@ void main() {
       ),
     );
   });
+
+  test('an entry with blank content is reported as damaged', () {
+    const empty = '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entries":[{"id":"a","content":"","createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
+    const whitespace = '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entries":[{"id":"a","content":"   \\n  ","createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
+    for (final broken in [empty, whitespace]) {
+      expect(
+        () => codec.decode(broken),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '备份文件已损坏，无法恢复',
+          ),
+        ),
+      );
+    }
+  });
 }

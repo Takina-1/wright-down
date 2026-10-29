@@ -71,7 +71,7 @@ class BackupCodec {
     final content = raw['content'];
     final dayKey = raw['dayKey'];
     if (id is! String || id.isEmpty ||
-        content is! String ||
+        content is! String || content.trim().isEmpty ||
         dayKey is! String || dayKey.isEmpty) {
       throw const BackupFormatException('备份文件已损坏，无法恢复');
     }
