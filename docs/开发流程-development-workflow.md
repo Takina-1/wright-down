@@ -62,7 +62,7 @@
 - 同一功能在需求、计划、测试报告中使用相同编号及中英文主题，不另起别名；中英文主题表达相同含义。
 - 长期维护的文档不在文件名中堆日期，正文记录更新时间。测试每一轮注明日期与被测版本，保留历史结果。
 - 不使用 `notes.md`、`new.md`、`final.md`、`test1.md` 等无法辨识用途的名称。
-- 未来采用 Git 后，分支可使用 `feat/F001-entry-autosave`；提交示例为 `feat(F001): add local autosave`。当前不假定仓库已初始化。
+- 分支使用 `feat/F001-entry-autosave` 形式；提交信息中英结合，格式为 `<type>:<中文说明>,<english summary>`，例如 `fix:导出日记,export diary`；需要标注功能编号时写成 `docs(F004):记录真机验收,record device acceptance`。
 
 ## 6. 需求与验收标准怎么写
 

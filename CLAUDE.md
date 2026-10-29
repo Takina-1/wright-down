@@ -3,6 +3,7 @@
 - 进入项目后先阅读并遵循根目录 [AGENTS.md](AGENTS.md)；项目开发、验证和文档维护规则以该文件为准。
 - 从 [文档总索引](docs/README.md) 查找当前任务相关资料，并遵循 [开发流程](docs/开发流程-development-workflow.md)。
 - 新需求先登记功能编号和功能文档，再从最新 `main` 创建 `feat/F编号-english-topic` 特性分支；开发、修复和测试记录在该分支完成，适用测试全部通过并更新报告后才可合并到 `main`。
+- 提交信息必须中英结合，格式为 `<type>:<中文说明>,<english summary>`，例如 `fix:导出日记,export diary`；需要标注功能编号时写成 `docs(F004):记录真机验收,record device acceptance`。
 - 测试失败、未执行或受阻时不得合并；不得直接在 `main` 上实现新需求。
 - 特性分支合并后保留本地和远程分支，不自动删除；删除分支必须取得用户明确授权。
 - 除固定入口 `README.md`、`AGENTS.md`、`CLAUDE.md` 外，Markdown 文件名必须同时包含语义对应的中文主题和英文主题，格式为 `<中文主题>-<english-topic>.md`；功能文档保留最前面的 `F编号-`。
