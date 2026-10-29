@@ -6,15 +6,11 @@ import '../platform/saf_file_gateway.dart';
 import 'export_page.dart';
 
 class LocalDataPage extends StatelessWidget {
-  const LocalDataPage({
-    super.key,
-    required this.repository,
-    this.fileGateway = const SafFileGateway(),
-  });
+  const LocalDataPage({super.key, required this.repository, this.fileGateway});
   final LocalEntryRepository repository;
 
-  /// 文件出口。默认用系统实现，测试可以注入替身。
-  final FileGateway fileGateway;
+  /// 文件出口。为空时用系统实现，测试可以注入替身。
+  final FileGateway? fileGateway;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -53,8 +49,10 @@ class LocalDataPage extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (context) =>
-                ExportPage(repository: repository, fileGateway: fileGateway),
+            builder: (context) => ExportPage(
+              repository: repository,
+              fileGateway: fileGateway ?? const SafFileGateway(),
+            ),
           ),
         ),
       ),

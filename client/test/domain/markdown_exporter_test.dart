@@ -47,6 +47,10 @@ void main() {
     ], exportedAt: DateTime.utc(2026, 10, 29, 4));
     // 顺序断言在缺少某个标题时会因为 indexOf 返回 -1 而恒真，这里补一条存在性断言。
     expect(markdown, contains('## 2026-10-29'));
+    expect(markdown, contains('## 2026-10-28'));
+    expect(markdown, contains('第二天的一条'));
+    expect(markdown, contains('较晚的一条'));
+    expect(markdown, contains('较早的一条'));
     expect(markdown.indexOf('第二天的一条') < markdown.indexOf('较晚的一条'), isTrue);
     expect(markdown.indexOf('较晚的一条') < markdown.indexOf('较早的一条'), isTrue);
     expect(
@@ -86,6 +90,8 @@ void main() {
     ], exportedAt: DateTime.utc(2026, 10, 29, 4));
     expect(markdown, contains('## 2026-10-28'));
     expect(markdown, contains('## 2026-10-29'));
+    expect(markdown, contains('**07:00**　归到前一组的条目'));
+    expect(markdown, contains('**06:00**　当天较早的条目'));
     // 分组标题按 dayKey 倒序，而不是按 createdAt 的本地日期倒序。
     expect(
       markdown.indexOf('## 2026-10-29') < markdown.indexOf('## 2026-10-28'),

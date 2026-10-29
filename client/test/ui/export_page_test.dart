@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_diary/app.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/domain/export/backup_codec.dart';
 import 'package:local_diary/src/domain/export/file_gateway.dart';
@@ -184,5 +185,45 @@ void main() {
 
     expect(find.text('这不是本应用的备份文件'), findsOneWidget);
     expect(repo.entries, isEmpty);
+  });
+
+  testWidgets('a restored entry shows up in the review timeline', (
+    tester,
+  ) async {
+    final repo = MemoryRepository();
+    final backup = const BackupCodec().encode([
+      Entry(
+        id: 'restored',
+        content: '从备份恢复出来的一条',
+        createdAt: time,
+        updatedAt: time,
+        dayKey: '2026-10-28',
+      ),
+    ], exportedAt: time);
+    final gateway = FakeFileGateway()
+      ..pickResult = Uint8List.fromList(utf8.encode(backup));
+
+    await tester.pumpWidget(JournalApp(repository: repo, fileGateway: gateway));
+    await tester.pumpAndSettle();
+
+    // 「我的」→ 「导出与备份」→ 触发恢复并确认。
+    await tester.tap(find.byKey(const Key('tab-mine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导出与备份'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从备份恢复'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('恢复'));
+    await tester.pumpAndSettle();
+
+    expect(repo.entries['restored'], isNotNull);
+
+    // 返回上一级，再切到「回顾」，恢复的条目要读得到。
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('从备份恢复出来的一条'), findsOneWidget);
   });
 }
