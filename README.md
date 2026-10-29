@@ -27,7 +27,7 @@ AGENTS.md               AI 开发助手的项目工作约定
 CLAUDE.md               Claude 开发助手的项目工作约定
 ```
 
-客户端已初始化为 Flutter Android 工程，F001 实现本地文字记录、自动保存和回顾列表。服务器暂未实现。开发工具与运行命令见 [开发环境说明](docs/开发环境-development-environment.md)，验收状态以功能台账和测试报告为准。
+客户端已初始化为 Flutter Android 工程，F001 实现本地文字记录、自动保存和回顾列表，F004 实现导出与备份恢复：可以把全部记录导出成可恢复的 JSON 备份文件，或导出成按日期分组的 Markdown 供阅读，也可以从备份文件合并恢复到本机（按条目 ID 与修改时间合并，本机较新的记录不会被覆盖）。入口在「我的 → 导出与备份」。备份与 Markdown 均为明文、不做加密。服务器暂未实现。开发工具与运行命令见 [开发环境说明](docs/开发环境-development-environment.md)，验收状态以功能台账和测试报告为准。
 
 在 PowerShell 中运行检查：
 
@@ -38,9 +38,11 @@ Set-Location client
 ..\scripts\flutter.ps1 build apk --debug
 ```
 
+其中 `test` 运行全部自动化测试，`build apk --debug` 生成调试安装包。
+
 连接开启 USB 调试的 Android 设备后，使用 `..\scripts\flutter.ps1 devices` 查看设备，再执行 `..\scripts\flutter.ps1 run -d <设备ID>`。
 
-当前已构建的调试包：`client/build/app/outputs/flutter-apk/app-debug.apk`。具体测试结果、校验值和手机验收步骤见 [F001 测试报告](docs/test-reports/F001-本地记录测试报告-local-entry-test-report.md)。
+当前已构建的调试包：`client/build/app/outputs/flutter-apk/app-debug.apk`。具体测试结果、校验值和手机验收步骤见 [F001 测试报告](docs/test-reports/F001-本地记录测试报告-local-entry-test-report.md) 与 [F004 测试报告](docs/test-reports/F004-导出与备份恢复测试报告-export-and-backup-test-report.md)。
 
 ## 架构约定
 

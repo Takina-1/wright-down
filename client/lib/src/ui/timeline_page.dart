@@ -76,6 +76,26 @@ class _TimelinePageState extends State<TimelinePage> {
       TextButton(onPressed: _load, child: const Text('重新加载')),
     ],
   );
+
+  /// 取条目所属月份，格式固定为 `YYYY-MM`。
+  ///
+  /// 防止历史脏数据打崩时间轴：早期版本或手工改过的备份可能留下
+  /// 长度不足的 dayKey，直接 `substring` 会抛 RangeError 让整页打不开。
+  /// 遇到这种数据就退回用创建时间的本地年月，条目本身仍然显示。
+  String _monthOf(Entry entry) => _dayKeyOf(entry).substring(0, 7);
+
+  /// 取可安全显示的日期键，格式固定为 `YYYY-MM-DD`。
+  ///
+  /// dayKey 不合法时退回用创建时间的本地日期。
+  String _dayKeyOf(Entry entry) {
+    if (isValidDayKey(entry.dayKey)) return entry.dayKey;
+    final local = entry.createdAt.toLocal();
+    final year = local.year.toString().padLeft(4, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,10 +181,9 @@ class _TimelinePageState extends State<TimelinePage> {
                     );
                   }
                   final entry = _entries[index];
-                  final month = entry.dayKey.substring(0, 7);
+                  final month = _monthOf(entry);
                   final showMonth =
-                      index == 0 ||
-                      _entries[index - 1].dayKey.substring(0, 7) != month;
+                      index == 0 || _monthOf(_entries[index - 1]) != month;
                   final time = entry.createdAt.toLocal();
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +209,7 @@ class _TimelinePageState extends State<TimelinePage> {
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 12),
                             child: Text(
-                              '${entry.dayKey}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                              '${_dayKeyOf(entry)}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
                             ),
                           ),
                           onTap: () => widget.onEdit(entry),

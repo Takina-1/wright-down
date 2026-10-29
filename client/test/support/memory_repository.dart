@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:local_diary/src/domain/entry.dart';
+import 'package:local_diary/src/domain/export/import_summary.dart';
 import 'package:local_diary/src/domain/local_entry_repository.dart';
+
+import 'entry_merger.dart';
 
 class MemoryRepository implements LocalEntryRepository {
   final Map<String, Entry> entries = {};
   int saves = 0;
   bool failSave = false;
   bool failList = false;
+  bool failImport = false;
   Completer<void>? gate;
 
   @override
@@ -37,6 +41,22 @@ class MemoryRepository implements LocalEntryRepository {
         )
         .take(limit)
         .toList();
+  }
+
+  @override
+  Future<List<Entry>> exportAll() async {
+    final sorted = entries.values.toList()
+      ..sort((a, b) {
+        final time = b.createdAt.compareTo(a.createdAt);
+        return time == 0 ? b.id.compareTo(a.id) : time;
+      });
+    return sorted;
+  }
+
+  @override
+  Future<ImportSummary> importAll(List<Entry> incoming) async {
+    if (failImport) throw StateError('simulated import failure');
+    return mergeEntries(entries, incoming);
   }
 
   @override

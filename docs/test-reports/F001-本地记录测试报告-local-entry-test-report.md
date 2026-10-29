@@ -66,6 +66,7 @@
 - [ ] 连接 Android 真机并启用 USB 调试，或安装并启动 Android 模拟器；当前项目 SDK 未安装 emulator 组件。
 - [ ] 按下列步骤执行设备验收，记录设备型号、Android 版本、APK 标识、逐项实际结果及缺陷复测结果。
 - [x] 整理已纳入版本控制的 `client/test/ui/zz_probe*_test.dart` 与 `client/test/zz_probe_temp_test.dart` 探针：详情页探针先返回主页再点击记录入口；启动探针改用同步临时目录，并只验证仓储延迟打开，避免在组件虚拟异步环境中等待文件 I/O。全量 27 项测试通过。
+  - 后续：这些探针在 F004 收尾时进一步清理——4 个只打印不断言的文件已删除，`zz_probe_temp_test.dart` 改名保留为 `client/test/data/sqlite_startup_failure_test.dart`，详见 [F004 测试报告](F004-导出与备份恢复测试报告-export-and-backup-test-report.md)。
 - [x] 修正探针文件的两处静态分析问题：移除多余和未使用的导入；`flutter analyze` 通过，0 问题。
 - [ ] 完成设备验收后更新本报告与功能台账；在此之前维持“待测试”。
 

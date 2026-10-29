@@ -5,14 +5,18 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/entry.dart';
+import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import 'entry_editor_controller.dart';
 import 'local_data_page.dart';
 import 'timeline_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.repository});
+  const HomePage({super.key, required this.repository, this.fileGateway});
   final LocalEntryRepository repository;
+
+  /// 文件出口。默认用系统实现，测试可以注入替身。
+  final FileGateway? fileGateway;
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -172,7 +176,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             onEdit: _edit,
             onStart: () => _selectTab(0),
           ),
-          _ => const LocalDataPage(),
+          _ => LocalDataPage(
+            repository: widget.repository,
+            fileGateway: widget.fileGateway,
+          ),
         },
       ),
       bottomNavigationBar: NavigationBar(
