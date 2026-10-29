@@ -1,6 +1,7 @@
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../../domain/entry.dart';
+import '../../domain/export/import_summary.dart';
 import '../../domain/local_entry_repository.dart';
 
 class SqliteEntryRepository implements LocalEntryRepository {
@@ -87,24 +88,82 @@ class SqliteEntryRepository implements LocalEntryRepository {
       orderBy: 'created_at DESC, id DESC',
       limit: limit,
     );
-    return rows
-        .map(
-          (row) => Entry(
-            id: row['id'] as String,
-            content: row['content'] as String,
-            createdAt: DateTime.fromMillisecondsSinceEpoch(
-              row['created_at'] as int,
-              isUtc: true,
-            ),
-            updatedAt: DateTime.fromMillisecondsSinceEpoch(
-              row['updated_at'] as int,
-              isUtc: true,
-            ),
-            dayKey: row['day_key'] as String,
-          ),
-        )
-        .toList();
+    return rows.map(_toEntry).toList();
   }
+
+  @override
+  Future<List<Entry>> exportAll() async {
+    final db = await _database();
+    final rows = await db.query('entries', orderBy: 'created_at DESC, id DESC');
+    return rows.map(_toEntry).toList();
+  }
+
+  @override
+  Future<ImportSummary> importAll(List<Entry> entries) async {
+    final db = await _database();
+    var inserted = 0;
+    var updated = 0;
+    var skipped = 0;
+    await db.transaction((txn) async {
+      for (final entry in entries) {
+        if (entry.id.isEmpty) {
+          throw ArgumentError('An imported entry needs an id');
+        }
+        final rows = await txn.query(
+          'entries',
+          columns: ['updated_at'],
+          where: 'id = ?',
+          whereArgs: [entry.id],
+          limit: 1,
+        );
+        if (rows.isEmpty) {
+          await txn.insert('entries', {
+            'id': entry.id,
+            'content': entry.content,
+            'created_at': entry.createdAt.millisecondsSinceEpoch,
+            'updated_at': entry.updatedAt.millisecondsSinceEpoch,
+            'day_key': entry.dayKey,
+          });
+          inserted++;
+          continue;
+        }
+        final localUpdatedAt = rows.first['updated_at'] as int;
+        if (entry.updatedAt.millisecondsSinceEpoch > localUpdatedAt) {
+          await txn.update(
+            'entries',
+            {
+              'content': entry.content,
+              'updated_at': entry.updatedAt.millisecondsSinceEpoch,
+            },
+            where: 'id = ?',
+            whereArgs: [entry.id],
+          );
+          updated++;
+        } else {
+          skipped++;
+        }
+      }
+    });
+    return ImportSummary(
+      inserted: inserted,
+      updated: updated,
+      skipped: skipped,
+    );
+  }
+
+  Entry _toEntry(Map<String, Object?> row) => Entry(
+    id: row['id'] as String,
+    content: row['content'] as String,
+    createdAt: DateTime.fromMillisecondsSinceEpoch(
+      row['created_at'] as int,
+      isUtc: true,
+    ),
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(
+      row['updated_at'] as int,
+      isUtc: true,
+    ),
+    dayKey: row['day_key'] as String,
+  );
 
   @override
   Future<void> close() async {
