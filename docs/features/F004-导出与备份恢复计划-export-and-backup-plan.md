@@ -2225,6 +2225,8 @@ git add -A
 git commit -m "docs(F004): record export and backup test results"
 ```
 
+**实际结果（2026-10-29）**：格式化 `Formatted 32 files (0 changed)`；静态分析 `No issues found!`；全量自动化测试 80 项全部通过（不是 Step 3 预估的 61 项：预估按 F001 当时的 27 项基线计算，未包含后续 F002/F003 新增的用例，也未计入被删除的探针用例）；调试 APK 构建成功，产物 159,487,352 字节。详见 [F004 测试报告](../test-reports/F004-导出与备份恢复测试报告-export-and-backup-test-report.md)。真机项未执行，原因是没有连接 Android 设备。
+
 ---
 
 ### Task 10：合并前检查与合并
@@ -2289,4 +2291,4 @@ git push origin feat/F004-export-and-backup
 - 附件与图片（当前版本没有附件）
 - 备份文件签名与校验
 - 跨设备自动同步（属于后续的 SyncEngine 编号）
-- 清理 `client/test/ui/zz_probe*_test.dart` 等只打印不断言的探针测试（与本功能无关，另行处理）
+- 清理 `client/test/ui/zz_probe*_test.dart` 等只打印不断言的探针测试（原计划与本功能无关，另行处理；已在 Task 9 完成，详见测试报告的「探针测试文件清理」一节）
