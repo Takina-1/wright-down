@@ -342,10 +342,15 @@ class BackupCodec {
     if (rawEntries is! List) {
       throw const BackupFormatException('备份文件已损坏，无法恢复');
     }
+    final entries = [for (final item in rawEntries) _decodeEntry(item)];
+    final ids = {for (final entry in entries) entry.id};
+    if (ids.length != entries.length) {
+      throw const BackupFormatException('备份文件已损坏，无法恢复');
+    }
     return BackupDocument(
       version: version,
       exportedAt: _parseDate(raw['exportedAt']),
-      entries: [for (final item in rawEntries) _decodeEntry(item)],
+      entries: entries,
     );
   }
 
@@ -670,7 +675,8 @@ RestorePreview compareRestore(List<Entry> local, List<Entry> incoming) {
     final existing = byId[entry.id];
     if (existing == null) {
       inserted++;
-    } else if (entry.updatedAt.isAfter(existing.updatedAt)) {
+    } else if (entry.updatedAt.millisecondsSinceEpoch >
+        existing.updatedAt.millisecondsSinceEpoch) {
       updated++;
     } else {
       skipped++;
@@ -1108,7 +1114,8 @@ import 'package:local_diary/src/domain/export/import_summary.dart';
       if (existing == null) {
         entries[entry.id] = entry;
         inserted++;
-      } else if (entry.updatedAt.isAfter(existing.updatedAt)) {
+      } else if (entry.updatedAt.millisecondsSinceEpoch >
+          existing.updatedAt.millisecondsSinceEpoch) {
         entries[entry.id] = Entry(
           id: existing.id,
           content: entry.content,
