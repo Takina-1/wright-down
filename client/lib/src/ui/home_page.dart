@@ -172,7 +172,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             onEdit: _edit,
             onStart: () => _selectTab(0),
           ),
-          _ => const LocalDataPage(),
+          _ => LocalDataPage(repository: widget.repository),
         },
       ),
       bottomNavigationBar: NavigationBar(
