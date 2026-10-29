@@ -44,7 +44,17 @@ void main() {
     final exported = await repo.exportAll();
     expect(exported, hasLength(40));
     expect(exported.first.id, 'id-39');
+    expect(exported[20].id, 'id-19');
     expect(exported.last.id, 'id-00');
+  });
+
+  test('exportAll orders by creation time, not by id', () async {
+    await repo.save(entry('a', '最新', createdAt: DateTime.utc(2026, 10, 28)));
+    await repo.save(entry('b', '中间', createdAt: DateTime.utc(2026, 10, 27)));
+    await repo.save(entry('c', '最旧', createdAt: DateTime.utc(2026, 10, 26)));
+    final exported = await repo.exportAll();
+    expect(exported.map((e) => e.id).toList(), ['a', 'b', 'c']);
+    expect(exported.first.id, 'a');
   });
 
   test('a new id from a backup is inserted', () async {
