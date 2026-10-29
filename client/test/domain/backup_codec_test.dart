@@ -126,6 +126,29 @@ void main() {
     );
   });
 
+  test('a backup with duplicated ids is reported as damaged', () {
+    const duplicated = '{"format":"local-diary-backup","version":1,'
+        '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entries":[{"id":"a","content":"正文",'
+        '"createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z",'
+        '"dayKey":"2026-10-28"},'
+        '{"id":"a","content":"另一条正文",'
+        '"createdAt":"2026-10-28T08:00:00.000Z",'
+        '"updatedAt":"2026-10-28T08:00:00.000Z",'
+        '"dayKey":"2026-10-28"}]}';
+    expect(
+      () => codec.decode(duplicated),
+      throwsA(
+        isA<BackupFormatException>().having(
+          (e) => e.reason,
+          'reason',
+          '备份文件已损坏，无法恢复',
+        ),
+      ),
+    );
+  });
+
   test('an entry with blank content is reported as damaged', () {
     const empty = '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'

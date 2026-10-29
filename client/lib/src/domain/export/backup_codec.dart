@@ -48,10 +48,18 @@ class BackupCodec {
     if (rawEntries is! List) {
       throw const BackupFormatException('备份文件已损坏，无法恢复');
     }
+    final entries = [for (final item in rawEntries) _decodeEntry(item)];
+    final seenIds = <String>{};
+    for (final entry in entries) {
+      // 合法备份的 ID 是主键，不会重复；重复说明文件已损坏。
+      if (!seenIds.add(entry.id)) {
+        throw const BackupFormatException('备份文件已损坏，无法恢复');
+      }
+    }
     return BackupDocument(
       version: version,
       exportedAt: _parseDate(raw['exportedAt']),
-      entries: [for (final item in rawEntries) _decodeEntry(item)],
+      entries: entries,
     );
   }
 
