@@ -11,6 +11,6 @@
 | F003 | 保留已合并的特性分支 | P0 | 已完成 | [需求与方案](F003-保留特性分支-retain-feature-branches.md) | [测试报告](../test-reports/F003-保留特性分支测试报告-retain-feature-branches-test-report.md) | 合并提交 `5e16b0d` 后确认 F003 分支仍存在；规则与回归检查通过 |
 | F004 | 导出与备份恢复 | P1 | 待验收 | [需求与方案](F004-导出与备份恢复-export-and-backup.md) · [计划](F004-导出与备份恢复计划-export-and-backup-plan.md) | [测试报告](../test-reports/F004-导出与备份恢复测试报告-export-and-backup-test-report.md) | 宿主验证通过：静态分析无问题、91 项自动化测试通过、调试 APK 构建成功；真机验收 11 类通过（SAF 保存与选择、分享面板、取消行为、损坏文件拒绝、合并恢复、幂等、离线导出），仅 1000 条量级未执行 |
 | F005 | 删除记录与回收站 | P1 | 待测试 | [需求与方案](F005-删除记录与回收站-entry-delete-and-trash.md) · [计划](F005-删除记录与回收站计划-entry-delete-and-trash-plan.md) | [测试报告](../test-reports/F005-删除记录与回收站测试报告-entry-delete-and-trash-test-report.md) | 宿主侧通过：静态分析无问题、235 项自动化测试通过、调试 APK 构建通过；**真机验收未执行**（测试时设备未连接），需连上手机后补做 |
-| F006 | 心情打卡 | P1 | 待验收 | [需求与方案](F006-心情打卡-mood-checkin.md) · [计划](F006-心情打卡计划-mood-checkin-plan.md) | [测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md) | 宿主侧通过：静态分析无问题、275 项自动化测试通过、调试 APK 构建通过、整分支终审可合并；**真机验收未执行**（测试时设备未连接），需连上手机后补做 |
+| F006 | 心情打卡 | P1 | 待验收 | [需求与方案](F006-心情打卡-mood-checkin.md) · [计划](F006-心情打卡计划-mood-checkin-plan.md) | [测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md) | 真机验收（Xiaomi 2211133C / Android 15）已执行：AC-01~AC-03、AC-05~AC-12 通过，含 schema v2→v3 升级与幂等、备份导出与旧备份导入、小屏布局；**AC-04 未通过**——时间轴 emoji 实现为正文左侧，与验收标准「正文上方」不符，用户 2026-10-31 决定暂缓处置，F006 暂不合并 |
 
 状态：待明确、待开发、开发中、待测试、待验收、已完成、阻塞、已取消。新增功能后更新下一可用编号；状态只在此表维护。
