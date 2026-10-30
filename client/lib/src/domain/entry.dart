@@ -14,6 +14,7 @@ class Entry {
     required this.updatedAt,
     required this.dayKey,
     this.deletedAt,
+    this.mood,              // 可选；稳定标记字符串，非 emoji
   });
 
   final String id;
@@ -24,6 +25,9 @@ class Entry {
 
   /// 删除时间。非空表示这条已被软删除：数据仍在库里，但不该出现在时间轴上。
   final DateTime? deletedAt;
+
+  /// 心情标记。非空表示这条记录带心情。
+  final String? mood;
 
   bool get isDeleted => deletedAt != null;
 }
