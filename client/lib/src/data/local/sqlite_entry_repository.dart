@@ -16,7 +16,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -28,7 +28,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL,
               day_key TEXT NOT NULL,
-              deleted_at INTEGER
+              deleted_at INTEGER,
+              mood TEXT
             )''');
             await db.execute(
               'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
@@ -54,6 +55,14 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 'CREATE INDEX IF NOT EXISTS entries_deleted '
                 'ON entries(deleted_at DESC, id DESC)',
               );
+            }
+            if (oldVersion < 3) {
+              // F006 的 mood 迁移同样幂等：用户若用旧版打开过，列可能已在。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasMood = columns.any((row) => row['name'] == 'mood');
+              if (!hasMood) {
+                await db.execute('ALTER TABLE entries ADD COLUMN mood TEXT');
+              }
             }
           },
         ),
