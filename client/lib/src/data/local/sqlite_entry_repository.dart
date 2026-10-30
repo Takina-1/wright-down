@@ -15,7 +15,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -26,12 +26,29 @@ class SqliteEntryRepository implements LocalEntryRepository {
               content TEXT NOT NULL,
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL,
-              day_key TEXT NOT NULL
+              day_key TEXT NOT NULL,
+              deleted_at INTEGER
             )''');
             await db.execute(
               'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
             );
             await db.execute('CREATE INDEX entries_day ON entries(day_key)');
+            await db.execute(
+              'CREATE INDEX entries_deleted ON entries(deleted_at DESC, id DESC)',
+            );
+          },
+          onUpgrade: (db, oldVersion, newVersion) async {
+            if (oldVersion < 2) {
+              // 加一个可空列即可：老行读出来是 NULL，等价于「未删除」，
+              // 不需要重写任何数据。
+              await db.execute(
+                'ALTER TABLE entries ADD COLUMN deleted_at INTEGER',
+              );
+              await db.execute(
+                'CREATE INDEX IF NOT EXISTS entries_deleted '
+                'ON entries(deleted_at DESC, id DESC)',
+              );
+            }
           },
         ),
       ));
