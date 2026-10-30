@@ -28,10 +28,15 @@ class EntryEditorController extends ChangeNotifier {
   Future<bool>? _saving;
   SaveStatus _status = SaveStatus.empty;
   String? _error;
+  String? _deleteError;
 
   String get content => _content;
   SaveStatus get status => _status;
   String? get error => _error;
+
+  /// 删除失败时的错误文案。与保存错误（[error]）是两回事：
+  /// 删除失败不该把状态显示成「保存失败」，也不该出现「重试保存」按钮。
+  String? get deleteError => _deleteError;
   bool get _dirty =>
       _persisted ? _content != _savedContent : _content.trim().isNotEmpty;
   bool get hasPendingChanges => _writing || _dirty;
@@ -138,8 +143,8 @@ class EntryEditorController extends ChangeNotifier {
   /// 当前是否正在编辑一条已保存的条目。新记录没有可删除的对象。
   bool get canDelete => _persisted && _id != null;
 
-  /// 当前编辑的条目 ID；编辑新记录时为 null。
-  String? get currentEntryId => _id;
+  /// 当前编辑的、且已落库的条目 ID；新记录（或保存失败、从未落库）时为 null。
+  String? get currentEntryId => _persisted ? _id : null;
 
   /// 删除当前编辑的条目。
   ///
@@ -149,6 +154,12 @@ class EntryEditorController extends ChangeNotifier {
     if (_disposed) return false;
     final id = _id;
     if (id == null || !_persisted) return false;
+    // 先等在飞行的保存落地：否则迟到的保存会把下面的复位覆盖掉，
+    // 让界面显示「原记录仍保留」，而记录其实已经删掉了。
+    final pending = _saving;
+    if (pending != null) {
+      await pending;
+    }
     // 正文非空时先落盘，免得删除把刚写的内容一起丢掉。
     // 正文为空时跳过落盘：保存会因为「正文不能为空」失败，
     // 但用户要的是把这条记录删掉，不该被针对保存的规则拦住。
@@ -157,8 +168,13 @@ class EntryEditorController extends ChangeNotifier {
       await repository.softDelete(id);
     } catch (error) {
       debugPrint('删除失败：$error');
-      _status = SaveStatus.error;
-      _error = '删除失败，这条记录仍在。';
+      // 防抖定时器还活着的话，1 秒后会触发 flush()，把「正文不能为空」
+      // 这条与删除无关的文案盖上来。这里先把它掐掉。
+      _timer?.cancel();
+      _timer = null;
+      // 删除错误单独走 [deleteError]：不占用保存的状态与错误字段，
+      // 否则界面会同时显示「保存失败」和「重试保存」。
+      _deleteError = '删除失败，这条记录仍在。';
       _notify();
       return false;
     }
@@ -168,6 +184,7 @@ class EntryEditorController extends ChangeNotifier {
     _createdAt = null;
     _persisted = false;
     _error = null;
+    _deleteError = null;
     _status = SaveStatus.empty;
     _notify();
     return true;

@@ -141,6 +141,7 @@ void main() {
     expect(controller.canDelete, isFalse);
     expect(controller.currentEntryId, isNull);
     expect(controller.content, isEmpty);
+    expect(controller.status, SaveStatus.empty);
     expect(repo.entries['saved-1']!.deletedAt, isNotNull);
   });
 
@@ -164,7 +165,11 @@ void main() {
 
     expect(await controller.deleteCurrent(), isFalse);
     expect(controller.content, '写错了');
-    expect(controller.error, isNotNull);
+    // 删除错误单独走 deleteError：不占用保存的状态与错误字段，
+    // 否则界面会同时显示「保存失败」和「重试保存」。
+    expect(controller.deleteError, '删除失败，这条记录仍在。');
+    expect(controller.error, isNull);
+    expect(controller.status, isNot(SaveStatus.error));
     expect(repo.entries['saved-1']!.deletedAt, isNull);
   });
 
@@ -220,5 +225,153 @@ void main() {
 
     expect(repo.entries['saved-1']!.content, '最新内容');
     expect(repo.entries['saved-1']!.deletedAt, isNotNull);
+  });
+
+  testWidgets('删除会等在飞行的保存落地，迟到的保存不会冲掉复位', (
+    tester,
+  ) async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+
+    // 一次保存正在飞行，同时用户把正文清空了。
+    repo.gate = Completer<void>();
+    controller.updateContent('最新内容');
+    final saving = controller.flush();
+    controller.updateContent('');
+
+    final deleting = controller.deleteCurrent();
+    // 让删除先跑起来（修复后它会挂在等在飞行的保存上），再放行保存。
+    await tester.pump(const Duration(milliseconds: 20));
+    repo.gate!.complete();
+
+    expect(await deleting, isTrue);
+    await saving;
+
+    // 迟到的保存没有把控制器改回「正文不能为空，原记录仍保留」的错误态。
+    expect(controller.content, isEmpty);
+    expect(controller.status, isNot(SaveStatus.error));
+    expect(controller.error, isNull);
+    expect(controller.deleteError, isNull);
+    expect(controller.hasPendingChanges, isFalse);
+    expect(repo.entries['saved-1']!.deletedAt, isNotNull);
+  });
+
+  testWidgets('删除失败的文案不会被防抖定时器覆盖', (tester) async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+
+    // 清空正文：1 秒防抖定时器还活着，稍后会自己触发一次 flush()。
+    controller.updateContent('');
+    repo.failDelete = true;
+
+    expect(await controller.deleteCurrent(), isFalse);
+    expect(controller.deleteError, '删除失败，这条记录仍在。');
+    expect(controller.error, isNull);
+    expect(controller.status, isNot(SaveStatus.error));
+
+    // 等过 1 秒：定时器若还活着，flush() 会把「正文不能为空，原记录仍保留。」
+    // 写进保存的错误字段，把删除失败的提示冲掉。
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    expect(controller.deleteError, '删除失败，这条记录仍在。');
+    expect(controller.error, isNull);
+    expect(controller.status, isNot(SaveStatus.error));
+    expect(repo.entries['saved-1']!.deletedAt, isNull);
+  });
+
+  test('存储错误时中止删除，记录仍在', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '旧内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+    repo.failSave = true;
+    controller.updateContent('新内容');
+
+    // 落盘失败必须中止删除，否则会把没存住的新内容一起删掉。
+    expect(await controller.deleteCurrent(), isFalse);
+    expect(repo.entries['saved-1']!.deletedAt, isNull);
+    expect(repo.entries['saved-1']!.content, '旧内容');
+  });
+
+  test('保存失败的新记录不可删除', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'entry-1',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    repo.failSave = true;
+    controller.updateContent('还没落库的内容');
+
+    expect(await controller.flush(), isFalse);
+    // 保存失败后 _id 已经被分配，但从未落库：不能当成可删除的条目。
+    expect(controller.canDelete, isFalse);
+    expect(controller.currentEntryId, isNull);
+  });
+
+  test('删除后再新建的记录重新计算日期，不继承被删条目', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'new-after-delete',
+      now: () => DateTime(2026, 11, 5, 9),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+
+    expect(await controller.deleteCurrent(), isTrue);
+    expect(controller.status, SaveStatus.empty);
+
+    controller.updateContent('新的记录');
+    expect(await controller.flush(), isTrue);
+
+    final created = repo.entries['new-after-delete']!;
+    expect(created.dayKey, '2026-11-05');
+    expect(created.createdAt, DateTime(2026, 11, 5, 9));
   });
 }
