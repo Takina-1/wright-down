@@ -10,6 +10,6 @@
 | F002 | 特性分支开发流程 | P0 | 已完成 | [需求与方案](F002-特性分支流程-feature-branch-workflow.md) | [测试报告](../test-reports/F002-特性分支流程测试报告-feature-branch-workflow-test-report.md) | 验证通过，已通过合并提交 `c3fab3b` 合并到 `main` |
 | F003 | 保留已合并的特性分支 | P0 | 已完成 | [需求与方案](F003-保留特性分支-retain-feature-branches.md) | [测试报告](../test-reports/F003-保留特性分支测试报告-retain-feature-branches-test-report.md) | 合并提交 `5e16b0d` 后确认 F003 分支仍存在；规则与回归检查通过 |
 | F004 | 导出与备份恢复 | P1 | 待验收 | [需求与方案](F004-导出与备份恢复-export-and-backup.md) · [计划](F004-导出与备份恢复计划-export-and-backup-plan.md) | [测试报告](../test-reports/F004-导出与备份恢复测试报告-export-and-backup-test-report.md) | 宿主验证通过：静态分析无问题、91 项自动化测试通过、调试 APK 构建成功；真机验收 11 类通过（SAF 保存与选择、分享面板、取消行为、损坏文件拒绝、合并恢复、幂等、离线导出），仅 1000 条量级未执行 |
-| F005 | 删除记录与回收站 | P1 | 开发中 | [需求与方案](F005-删除记录与回收站-entry-delete-and-trash.md) | 待创建 | 软删除 + 回收站；回顾页长按与记录页两处删除入口；备份格式升 v2 带删除标记 |
+| F005 | 删除记录与回收站 | P1 | 待测试 | [需求与方案](F005-删除记录与回收站-entry-delete-and-trash.md) · [计划](F005-删除记录与回收站计划-entry-delete-and-trash-plan.md) | [测试报告](../test-reports/F005-删除记录与回收站测试报告-entry-delete-and-trash-test-report.md) | 宿主侧通过：静态分析无问题、235 项自动化测试通过、调试 APK 构建通过；**真机验收未执行**（测试时设备未连接），需连上手机后补做 |
 
 状态：待明确、待开发、开发中、待测试、待验收、已完成、阻塞、已取消。新增功能后更新下一可用编号；状态只在此表维护。

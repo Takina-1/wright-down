@@ -10,3 +10,4 @@
 | F002 | [特性分支开发流程](F002-特性分支流程测试报告-feature-branch-workflow-test-report.md) | 2026-10-29 | `feat/F002-feature-branch-workflow` | 规则、链接、分支、格式检查及 27 项回归测试通过 |
 | F003 | [保留已合并的特性分支](F003-保留特性分支测试报告-retain-feature-branches-test-report.md) | 2026-10-29 | `feat/F003-retain-feature-branches` | 规则、链接、27 项测试和分析通过；合并后分支保留验证通过 |
 | F004 | [导出与备份恢复](F004-导出与备份恢复测试报告-export-and-backup-test-report.md) | 2026-10-29 | `main`（`a5107f4`） | 静态分析、91 项自动化测试与调试 APK 构建通过；真机验收 11 类通过（SAF 保存与选择、分享面板、取消行为、损坏文件拒绝、合并恢复、幂等、离线导出），仅 1000 条量级未执行 |
+| F005 | [删除记录与回收站](F005-删除记录与回收站测试报告-entry-delete-and-trash-test-report.md) | 2026-10-30 | `feat/F005-entry-delete-and-trash`（`5d18c02`） | 宿主侧：静态分析无问题、235 项自动化测试通过、调试 APK 构建通过；**真机验收未执行**（测试时设备未连接） |
