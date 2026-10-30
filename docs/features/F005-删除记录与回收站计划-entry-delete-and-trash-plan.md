@@ -2581,6 +2581,14 @@ Expected: 全部通过，**用例数不少于 91 + 本次新增**。把实际通
 Run: `cd client && flutter build apk --debug`
 Expected: `Built build/app/outputs/flutter-apk/app-debug.apk`。
 
+- [ ] **Step 3.5: 检查没有遗留的占位实现**
+
+Task 1 曾在生产仓储里放 5 个 `UnimplementedError` 占位方法以便编译通过，Task 3 必须把它们全部替换掉。占位是**运行期**才炸的，`analyze` 和 `test` 都可能发现不了，所以这里单独做一次机械检查：
+
+Run: `grep -rn "UnimplementedError" client/lib || echo "没有占位实现"`
+
+Expected: 输出 `没有占位实现`。若仍有命中，说明 Task 3 漏了实现，必须回去补齐，不能继续合并。
+
 - [ ] **Step 4: 提交（如有改动）**
 
 ```bash
