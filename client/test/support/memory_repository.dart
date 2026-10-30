@@ -25,6 +25,10 @@ class MemoryRepository implements LocalEntryRepository {
   /// 回收站读取失败开关。只影响 [listDeleted]，与 [failList] 相互独立。
   bool failListDeleted = false;
 
+  /// 恢复失败开关。只影响 [restore]，与 [failDelete] 相互独立——
+  /// 恢复是写回操作，不是删除操作，不该跟彻底删除共用一个开关。
+  bool failRestore = false;
+
   /// 保存挂起点：置为未完成的 Completer 时，[save] 会先挂起。
   Completer<void>? gate;
 
@@ -133,6 +137,7 @@ class MemoryRepository implements LocalEntryRepository {
   @override
   Future<void> restore(String id) async {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    if (failRestore) throw StateError('simulated restore failure');
     final existing = entries[id];
     // 与生产实现一致：不存在与未删除共用同一条错误消息。
     if (existing == null || existing.deletedAt == null) {
