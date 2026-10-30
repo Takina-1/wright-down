@@ -69,12 +69,17 @@ class SqliteEntryRepository implements LocalEntryRepository {
       throw ArgumentError('An entry needs an id and non-empty content');
     }
     final db = await _database();
+    final deletedAt = entry.deletedAt;
     await db.transaction((txn) async {
       final updated = await txn.update(
         'entries',
         {
           'content': entry.content,
           'updated_at': entry.updatedAt.millisecondsSinceEpoch,
+          // 删除标记只在显式带上时才写：编辑一条已软删除的条目时，
+          // 调用方构造的 Entry 不带 deletedAt，库里的删除标记必须留着，
+          // 否则条目会被无声复活回到时间轴。
+          if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -86,6 +91,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'created_at': entry.createdAt.millisecondsSinceEpoch,
           'updated_at': entry.updatedAt.millisecondsSinceEpoch,
           'day_key': entry.dayKey,
+          if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
         });
       }
     });
@@ -137,47 +143,81 @@ class SqliteEntryRepository implements LocalEntryRepository {
   Future<void> softDelete(String id) async {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
     final db = await _database();
-    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final updated = await db.update(
-      'entries',
-      {'deleted_at': stamp, 'updated_at': stamp},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (updated == 0) {
-      throw StateError('No such entry: $id');
-    }
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'entries',
+        columns: ['updated_at'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('No such entry: $id');
+      }
+      // 版本戳只许增不许减：设备时钟回拨时不能让 updated_at 倒退，
+      // 否则旧备份会把刚恢复的条目打回删除状态。
+      final current = rows.first['updated_at'] as int;
+      final stamp = current > now ? current : now;
+      // deleted_at 记的是删除发生的墙上时间，与版本戳分开。
+      await txn.update(
+        'entries',
+        {'deleted_at': now, 'updated_at': stamp},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    });
   }
 
   @override
   Future<void> restore(String id) async {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
     final db = await _database();
-    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    // 只对已删除的条目生效：未删除的条目没有可恢复的删除标记。
-    final updated = await db.update(
-      'entries',
-      {'deleted_at': null, 'updated_at': stamp},
-      where: 'id = ? AND deleted_at IS NOT NULL',
-      whereArgs: [id],
-    );
-    if (updated == 0) {
-      throw StateError('Entry $id is not in the trash');
-    }
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'entries',
+        columns: ['updated_at', 'deleted_at'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      // 只对已删除的条目生效：未删除的条目没有可恢复的删除标记。
+      if (rows.isEmpty || rows.first['deleted_at'] == null) {
+        throw StateError('Entry $id is not in the trash');
+      }
+      // 版本戳只许增不许减：恢复时也不能把 updated_at 写小。
+      final current = rows.first['updated_at'] as int;
+      final stamp = current > now ? current : now;
+      await txn.update(
+        'entries',
+        {'deleted_at': null, 'updated_at': stamp},
+        where: 'id = ? AND deleted_at IS NOT NULL',
+        whereArgs: [id],
+      );
+    });
   }
 
   @override
   Future<void> purge(String id) async {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
     final db = await _database();
-    // 不限制是否已删除：删除标记由调用方限定在回收站页。
+    // 只允许彻底删除回收站里的条目：活着条目误传 id 也不会被物理移除。
     final deleted = await db.delete(
       'entries',
-      where: 'id = ?',
+      where: 'id = ? AND deleted_at IS NOT NULL',
       whereArgs: [id],
     );
     if (deleted == 0) {
-      throw StateError('No such entry: $id');
+      final rows = await db.query(
+        'entries',
+        columns: ['deleted_at'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw StateError('No such entry: $id');
+      throw StateError('Entry $id is not in the trash');
     }
   }
 

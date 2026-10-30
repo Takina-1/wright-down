@@ -33,35 +33,55 @@ class MemoryRepository implements LocalEntryRepository {
     final waitFor = gate;
     if (waitFor != null) await waitFor.future;
     if (failSave) throw StateError('simulated disk failure');
-    entries[entry.id] = entry;
+    final existing = entries[entry.id];
+    if (existing == null) {
+      entries[entry.id] = entry;
+      return;
+    }
+    // 与生产实现口径一致：更新分支只写正文与修改时间，创建时间、日期键、
+    // 删除标记都沿用库里已有的值。
+    // 调用方（编辑器）构造的 Entry 不带 deletedAt，若整体替换，
+    // 已软删除的条目会被复活回到时间轴。
+    entries[entry.id] = Entry(
+      id: existing.id,
+      content: entry.content,
+      createdAt: existing.createdAt,
+      updatedAt: entry.updatedAt,
+      dayKey: existing.dayKey,
+      deletedAt: entry.deletedAt ?? existing.deletedAt,
+    );
   }
 
   @override
   Future<List<Entry>> list({EntryCursor? before, int limit = 30}) async {
+    if (limit < 1) throw ArgumentError.value(limit, 'limit');
     if (failList) throw StateError('simulated read failure');
-    final sorted = entries.values.toList()
-      ..sort((a, b) {
-        final time = b.createdAt.compareTo(a.createdAt);
-        return time == 0 ? b.id.compareTo(a.id) : time;
-      });
-    return sorted
-        .where(
-          (e) =>
-              e.deletedAt == null &&
-              (before == null ||
-                  e.createdAt.isBefore(before.createdAt) ||
-                  (e.createdAt == before.createdAt &&
-                      e.id.compareTo(before.id) < 0)),
-        )
+    return _sortedByCreated()
+        .where((e) {
+          if (e.deletedAt != null) return false;
+          if (before == null) return true;
+          // 与生产实现口径一致：游标比较用毫秒 epoch，不用微秒精度的 DateTime。
+          final created = e.createdAt.millisecondsSinceEpoch;
+          final cursor = before.createdAt.millisecondsSinceEpoch;
+          return created < cursor ||
+              (created == cursor && e.id.compareTo(before.id) < 0);
+        })
         .take(limit)
         .toList();
   }
 
   @override
   Future<List<Entry>> exportAll() async {
+    return _sortedByCreated();
+  }
+
+  /// 按创建时间倒序（毫秒精度），同毫秒按 id 倒序——与生产实现的排序口径一致。
+  List<Entry> _sortedByCreated() {
     final sorted = entries.values.toList()
       ..sort((a, b) {
-        final time = b.createdAt.compareTo(a.createdAt);
+        final time = b.createdAt.millisecondsSinceEpoch.compareTo(
+          a.createdAt.millisecondsSinceEpoch,
+        );
         return time == 0 ? b.id.compareTo(a.id) : time;
       });
     return sorted;
@@ -69,6 +89,7 @@ class MemoryRepository implements LocalEntryRepository {
 
   @override
   Future<List<Entry>> listDeleted({int limit = 30}) async {
+    if (limit < 1) throw ArgumentError.value(limit, 'limit');
     if (failListDeleted) throw StateError('simulated read failure');
     final sorted = entries.values.where((e) => e.deletedAt != null).toList()
       ..sort((a, b) {
@@ -82,28 +103,34 @@ class MemoryRepository implements LocalEntryRepository {
 
   @override
   Future<void> softDelete(String id) async {
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
     if (failDelete) throw StateError('simulated delete failure');
     final existing = entries[id];
-    if (existing == null) throw StateError('no such entry: $id');
-    final stamp = _now().toUtc();
+    if (existing == null) throw StateError('No such entry: $id');
+    final now = _now().toUtc();
+    // 版本戳只许增不许减：与生产实现一致，设备时钟回拨时不写小。
+    final stamp = _monotonicStamp(existing.updatedAt, now);
     entries[id] = Entry(
       id: existing.id,
       content: existing.content,
       createdAt: existing.createdAt,
       updatedAt: stamp,
       dayKey: existing.dayKey,
-      deletedAt: stamp,
+      // 删除时间记的是删除发生的墙上时间，与版本戳分开。
+      deletedAt: now,
     );
   }
 
   @override
   Future<void> restore(String id) async {
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
     final existing = entries[id];
-    if (existing == null) throw StateError('no such entry: $id');
-    if (existing.deletedAt == null) {
-      throw StateError('entry is not deleted: $id');
+    // 与生产实现一致：不存在与未删除共用同一条错误消息。
+    if (existing == null || existing.deletedAt == null) {
+      throw StateError('Entry $id is not in the trash');
     }
-    final stamp = _now().toUtc();
+    final now = _now().toUtc();
+    final stamp = _monotonicStamp(existing.updatedAt, now);
     entries[id] = Entry(
       id: existing.id,
       content: existing.content,
@@ -113,10 +140,27 @@ class MemoryRepository implements LocalEntryRepository {
     );
   }
 
+  /// 取当前版本戳与当前时刻的较大者，保证版本戳只增不减。
+  DateTime _monotonicStamp(DateTime current, DateTime now) {
+    if (current.millisecondsSinceEpoch > now.millisecondsSinceEpoch) {
+      return DateTime.fromMillisecondsSinceEpoch(
+        current.millisecondsSinceEpoch,
+        isUtc: true,
+      );
+    }
+    return now;
+  }
+
   @override
   Future<void> purge(String id) async {
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
     if (failDelete) throw StateError('simulated delete failure');
-    if (!entries.containsKey(id)) throw StateError('no such entry: $id');
+    final existing = entries[id];
+    // 只允许彻底删除回收站里的条目：活着条目误传 id 也不会被物理移除。
+    if (existing == null) throw StateError('No such entry: $id');
+    if (existing.deletedAt == null) {
+      throw StateError('Entry $id is not in the trash');
+    }
     entries.remove(id);
   }
 

@@ -280,4 +280,142 @@ void main() {
       expect(await repo.list(), isEmpty);
     });
   });
+
+  group('MemoryRepository 与生产实现的口径一致', () {
+    test('save 不会复活已删除条目', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      await repo.save(_entry(id: 'a'));
+      await repo.softDelete('a');
+
+      // 编辑器构造的 Entry 不带 deletedAt，保存不能把删除标记抹掉。
+      await repo.save(_entry(id: 'a', content: '改过的正文'));
+
+      final entry = repo.entries['a']!;
+      expect(entry.deletedAt, DateTime.utc(2026, 10, 30, 12));
+      expect(entry.content, '改过的正文');
+      expect(await repo.list(), isEmpty);
+      expect((await repo.listDeleted()).map((e) => e.id), ['a']);
+    });
+
+    test('save 带上 deletedAt 时按传入的写', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      await repo.save(_entry(id: 'a'));
+
+      await repo.save(
+        _entry(id: 'a', deletedAt: DateTime.utc(2026, 10, 30, 9)),
+      );
+
+      expect(repo.entries['a']!.deletedAt, DateTime.utc(2026, 10, 30, 9));
+    });
+
+    test('softDelete 对已删除条目重复调用会刷新删除时间', () async {
+      final clock = _FakeClock();
+      final repo = MemoryRepository(now: clock.call);
+      await repo.save(_entry(id: 'a'));
+      await repo.softDelete('a');
+      final first = repo.entries['a']!.deletedAt!;
+
+      clock.advance(const Duration(hours: 1));
+      await repo.softDelete('a');
+
+      expect(
+        repo.entries['a']!.deletedAt!.millisecondsSinceEpoch,
+        greaterThan(first.millisecondsSinceEpoch),
+      );
+    });
+
+    test('restore 覆盖 updated_at 且时钟回拨时不倒退', () async {
+      final clock = _FakeClock();
+      final repo = MemoryRepository(now: clock.call);
+      await repo.save(
+        _entry(id: 'a', updatedAt: DateTime.utc(2026, 10, 28, 8)),
+      );
+      await repo.softDelete('a');
+      final deletedStamp = repo.entries['a']!.updatedAt;
+
+      clock.advance(const Duration(hours: 5));
+      await repo.restore('a');
+      expect(repo.entries['a']!.updatedAt.isAfter(deletedStamp), isTrue);
+
+      // 时钟回拨到删除之前：版本戳只能不变，不能倒退。
+      clock.current = DateTime.utc(2026, 10, 20, 9);
+      await repo.softDelete('a');
+      final beforeRestore = repo.entries['a']!.updatedAt;
+      await repo.restore('a');
+      expect(
+        repo.entries['a']!.updatedAt.millisecondsSinceEpoch,
+        greaterThanOrEqualTo(beforeRestore.millisecondsSinceEpoch),
+      );
+    });
+
+    test('purge 未删除的条目抛出 StateError', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      await repo.save(_entry(id: 'a'));
+
+      await expectLater(repo.purge('a'), throwsA(isA<StateError>()));
+
+      expect(repo.entries.containsKey('a'), isTrue);
+    });
+
+    test('list 与 listDeleted 的 limit 小于 1 抛 ArgumentError', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      await repo.save(_entry(id: 'a'));
+
+      await expectLater(repo.list(limit: 0), throwsArgumentError);
+      await expectLater(repo.listDeleted(limit: 0), throwsArgumentError);
+    });
+
+    test('空 id 抛 ArgumentError', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+
+      await expectLater(repo.softDelete(''), throwsArgumentError);
+      await expectLater(repo.restore(''), throwsArgumentError);
+      await expectLater(repo.purge(''), throwsArgumentError);
+    });
+
+    test('restore 对不存在与未删除的条目抛同一条消息', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      await repo.save(_entry(id: 'a'));
+
+      await expectLater(
+        repo.restore('missing'),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            'Entry missing is not in the trash',
+          ),
+        ),
+      );
+      await expectLater(
+        repo.restore('a'),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            'Entry a is not in the trash',
+          ),
+        ),
+      );
+    });
+
+    test('list 的游标比较只到毫秒精度', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+      // 同一毫秒内的两个创建时间（只差微秒）：毫秒口径下二者等价。
+      await repo.save(
+        _entry(id: 'a', createdAt: DateTime.utc(2026, 10, 28, 8, 0, 0, 0, 1)),
+      );
+      await repo.save(
+        _entry(id: 'b', createdAt: DateTime.utc(2026, 10, 28, 8, 0, 0, 0, 0)),
+      );
+
+      // 游标与 a 同毫秒：毫秒口径下 a 不早于游标，被排除；
+      // b 与游标同毫秒但 id 更大，同样被排除。
+      final page = await repo.list(
+        before: EntryCursor(DateTime.utc(2026, 10, 28, 8, 0, 0, 0, 1), 'a'),
+      );
+
+      expect(page, isEmpty);
+    });
+  });
 }

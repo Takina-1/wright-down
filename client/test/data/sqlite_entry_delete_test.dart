@@ -30,12 +30,16 @@ void main() {
 
   tearDown(() async {
     await repo.close();
+    Object? cleanupError;
     try {
       await temp.delete(recursive: true);
     } catch (error) {
       // Windows 上偶发文件句柄占用，删不掉就留下路径，便于手工清理。
       debugPrint('删除临时目录失败: ${temp.path} ($error)');
+      cleanupError = error;
     }
+    // 清理失败不能被静默吞掉：断言无异常，测试要红，否则临时目录会一直堆积。
+    expect(cleanupError, isNull, reason: '临时目录清理失败: ${temp.path}');
   });
 
   test('软删除后时间轴不再返回该条目，但导出仍能拿到删除标记', () async {
@@ -139,5 +143,133 @@ void main() {
 
     final page = await repo.list(before: EntryCursor(time, 'c'), limit: 10);
     expect(page.map((e) => e.id), isNot(contains('b')));
+  });
+
+  test('对已删除条目重复软删除会刷新删除时间', () async {
+    await repo.save(entry('a', '正文'));
+    await repo.softDelete('a');
+    final first = (await repo.exportAll()).single.deletedAt!;
+
+    // 删除时间取当前时刻（毫秒精度），等一小段时间才能拉开顺序。
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await repo.softDelete('a');
+
+    final second = (await repo.exportAll()).single.deletedAt!;
+    expect(
+      second.millisecondsSinceEpoch,
+      greaterThan(first.millisecondsSinceEpoch),
+    );
+    // 条目仍在回收站里。
+    expect((await repo.listDeleted()).map((e) => e.id), ['a']);
+  });
+
+  test('恢复会覆盖 updated_at，且版本戳只增不减', () async {
+    await repo.save(entry('a', '正文'));
+    final before = (await repo.exportAll()).single;
+    await repo.softDelete('a');
+    final deletedStamp = (await repo.exportAll()).single.updatedAt;
+
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await repo.restore('a');
+
+    final after = (await repo.exportAll()).single;
+    expect(
+      after.updatedAt.millisecondsSinceEpoch,
+      greaterThanOrEqualTo(deletedStamp.millisecondsSinceEpoch),
+    );
+    expect(
+      after.updatedAt.millisecondsSinceEpoch,
+      greaterThanOrEqualTo(before.updatedAt.millisecondsSinceEpoch),
+    );
+  });
+
+  test('版本戳只增不减：条目时间戳晚于当前时刻时不写小', () async {
+    // 模拟设备时钟回拨：条目已有的版本戳比“现在”还新。
+    final future = DateTime.now().toUtc().add(const Duration(days: 1));
+    await repo.save(
+      Entry(
+        id: 'a',
+        content: '正文',
+        createdAt: time,
+        updatedAt: future,
+        dayKey: '2026-10-28',
+      ),
+    );
+
+    await repo.softDelete('a');
+    var current = (await repo.exportAll()).single;
+    expect(
+      current.updatedAt.millisecondsSinceEpoch,
+      greaterThanOrEqualTo(future.millisecondsSinceEpoch),
+    );
+
+    await repo.restore('a');
+    current = (await repo.exportAll()).single;
+    expect(
+      current.updatedAt.millisecondsSinceEpoch,
+      greaterThanOrEqualTo(future.millisecondsSinceEpoch),
+    );
+  });
+
+  test('编辑已删除的条目不会把它复活', () async {
+    await repo.save(entry('a', '正文'));
+    await repo.softDelete('a');
+
+    // 编辑器构造的 Entry 不带 deletedAt。
+    await repo.save(
+      Entry(
+        id: 'a',
+        content: '改过的正文',
+        createdAt: time,
+        updatedAt: DateTime.now().toUtc(),
+        dayKey: '2026-10-28',
+      ),
+    );
+
+    final exported = (await repo.exportAll()).single;
+    expect(exported.deletedAt, isNotNull);
+    expect(exported.isDeleted, isTrue);
+    expect(exported.content, '改过的正文');
+    expect(await repo.list(), isEmpty);
+    expect((await repo.listDeleted()).map((e) => e.id), ['a']);
+  });
+
+  test('回收站遵守 limit 上限', () async {
+    await repo.save(entry('a', '正文 a'));
+    await repo.save(entry('b', '正文 b'));
+    await repo.softDelete('a');
+    await repo.softDelete('b');
+
+    final trash = await repo.listDeleted(limit: 1);
+
+    expect(trash, hasLength(1));
+    expect(trash.single.id, 'b');
+  });
+
+  test('彻底删除未删除的条目会抛错', () async {
+    await repo.save(entry('a', '正文'));
+
+    await expectLater(repo.purge('a'), throwsStateError);
+
+    // 条目还在，没被误删。
+    expect((await repo.exportAll()).map((e) => e.id), ['a']);
+  });
+
+  test('save 带上删除标记时按传入的写', () async {
+    await repo.save(
+      Entry(
+        id: 'a',
+        content: '正文',
+        createdAt: time,
+        updatedAt: time,
+        dayKey: '2026-10-28',
+        deletedAt: DateTime.utc(2026, 10, 30, 9),
+      ),
+    );
+
+    final exported = (await repo.exportAll()).single;
+    expect(exported.deletedAt, DateTime.utc(2026, 10, 30, 9));
+    expect(await repo.list(), isEmpty);
+    expect((await repo.listDeleted()).map((e) => e.id), ['a']);
   });
 }
