@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/entry.dart';
 import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
+import '../domain/mood.dart';
 import 'entry_editor_controller.dart';
 import 'local_data_page.dart';
 import 'timeline_page.dart';
@@ -96,6 +97,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _focus.requestFocus();
   }
 
+  /// 心情选择弹层：列 5 种心情，已设时额外提供「清除」。
+  ///
+  /// 清除用空串作哨兵值：弹层返回类型是 [String?]，区分「取消」（null）
+  /// 与「清除」（空串），调用方据此决定 setMood(null) 还是 setMood(picked)。
+  Future<void> _showMoodSheet() async {
+    final picked = await showModalBottomSheet<String?>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...allMoods.map((m) {
+              final sel = _editor.mood == m.name;
+              return ListTile(
+                leading: Text(emojiOf(m.name)),
+                title: Text(labelOf(m.name)),
+                trailing: sel ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, m.name),
+              );
+            }),
+            if (_editor.mood != null)
+              ListTile(
+                leading: const Icon(Icons.clear_outlined),
+                title: const Text('清除'),
+                onTap: () => Navigator.pop(context, ''),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (picked == null) return; // 取消
+    _editor.setMood(picked.isEmpty ? null : picked);
+  }
+
   Future<void> _edit(Entry entry) async {
     if (_transitioning) return;
     setState(() {
@@ -112,6 +148,107 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (mounted) _focus.requestFocus();
       });
     }
+  }
+
+  /// 删除当前编辑的条目。确认后条目移入回收站，编辑器复位。
+  Future<void> _deleteCurrentEntry() async {
+    if (_transitioning) return;
+    // 删除成功后编辑器会复位，ID 会被清空，先记下来给撤销用。
+    final id = _editor.currentEntryId;
+    if (id == null) return;
+    final content = _editor.content;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除这条记录？'),
+        content: Text(_deleteDialogBody(content)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const Key('composer-delete-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    // SnackBar 挂在 app 级的 ScaffoldMessenger 上，可能比这个页面活得久
+    // （切 Tab 会重建页面）。把仓储取到局部变量，撤销回调就不依赖可能
+    // 已卸载的 State，也不会在 State defunct 后再碰 widget。
+    final repository = widget.repository;
+    setState(() {
+      _transitioning = true;
+    });
+    final deleted = await _editor.deleteCurrent();
+    if (!mounted) return;
+    setState(() {
+      _transitioning = false;
+    });
+    if (!deleted) {
+      // 删除失败要给出最贴近真实原因的那条文案：
+      // deleteCurrent() 在正文有改动时会先落盘，若这次保存失败，
+      // 它提前返回 false 且不设删除错误——此时只有保存错误说明问题。
+      // 反过来，删除本身失败时保存错误是 null，落到删除错误上。
+      final reason = _editor.error ?? _editor.deleteError ?? '删除失败，这条记录仍在';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('已移到回收站'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => unawaited(_undoDelete(id, repository)),
+        ),
+      ),
+    );
+  }
+
+  /// 回顾页删除了条目：如果正在编辑它，编辑器复位并提示用户。
+  void _entryDeleted(Entry entry) {
+    if (!_editor.markDeleted(entry.id)) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('这条记录已移入回收站')),
+    );
+  }
+
+  /// 撤销删除：把条目从回收站恢复回来。
+  ///
+  /// 仓储由调用方传入而不是从 `widget` 取：撤销入口挂在 app 级的
+  /// ScaffoldMessenger 上，页面此时可能已经卸载，State defunct 后再碰
+  /// `widget` 不可靠。
+  Future<void> _undoDelete(String id, LocalEntryRepository repository) async {
+    try {
+      await repository.restore(id);
+    } catch (error) {
+      debugPrint('恢复失败：$error');
+      // 恢复失败必须让用户看见：只 debugPrint 的话，用户点了撤销却看不到
+      // 条目回来，以为撤销没生效。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('恢复失败，请到回收站重试')),
+      );
+    }
+  }
+
+  /// 确认对话框的正文：内容摘要 + 回收站提示。
+  ///
+  /// 摘要为空时不写摘要，也就不留前导空行，否则对话框正文会以两个
+  /// 空行开头。
+  String _deleteDialogBody(String content) {
+    final snippet = _snippet(content);
+    const hint = '删除后可在回收站找回。';
+    return snippet.isEmpty ? hint : '$snippet\n\n$hint';
+  }
+
+  /// 确认对话框里的内容摘要。
+  String _snippet(String content) {
+    final flat = content.replaceAll('\n', ' ').trim();
+    return flat.length <= 20 ? flat : '${flat.substring(0, 20)}…';
   }
 
   Future<void> _exit() async {
@@ -175,6 +312,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             repository: widget.repository,
             onEdit: _edit,
             onStart: () => _selectTab(0),
+            onDelete: _entryDeleted,
           ),
           _ => LocalDataPage(
             repository: widget.repository,
@@ -262,6 +400,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onChanged: _editor.updateContent,
             ),
           ),
+          Row(
+            children: [
+              IconButton(
+                key: const Key('mood-entry'),
+                icon: Text(_editor.mood == null ? '😊' : emojiOf(_editor.mood)),
+                onPressed: _transitioning ? null : _showMoodSheet,
+              ),
+            ],
+          ),
           if (_editor.error != null) ...[
             Text(
               _editor.error!,
@@ -287,6 +434,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
+              if (_editor.canDelete)
+                TextButton(
+                  key: const Key('composer-delete'),
+                  onPressed: _transitioning ? null : _deleteCurrentEntry,
+                  child: const Text('删除这条'),
+                ),
               TextButton.icon(
                 onPressed: _transitioning ? null : _nextEntry,
                 icon: const Icon(Icons.add, size: 18),

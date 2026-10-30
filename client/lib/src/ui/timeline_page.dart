@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../domain/entry.dart';
 import '../domain/local_entry_repository.dart';
+import '../domain/mood.dart';
 
 class TimelinePage extends StatefulWidget {
   const TimelinePage({
@@ -9,10 +12,16 @@ class TimelinePage extends StatefulWidget {
     required this.repository,
     required this.onEdit,
     required this.onStart,
+    this.onDelete,
   });
   final LocalEntryRepository repository;
   final ValueChanged<Entry> onEdit;
   final VoidCallback onStart;
+
+  /// 删除成功后回调，让调用方知道哪条记录进了回收站。
+  ///
+  /// 不传就是 null，保持现有调用方兼容。
+  final ValueChanged<Entry>? onDelete;
   @override
   State<TimelinePage> createState() => _TimelinePageState();
 }
@@ -83,6 +92,155 @@ class _TimelinePageState extends State<TimelinePage> {
   /// 长度不足的 dayKey，直接 `substring` 会抛 RangeError 让整页打不开。
   /// 遇到这种数据就退回用创建时间的本地年月，条目本身仍然显示。
   String _monthOf(Entry entry) => _dayKeyOf(entry).substring(0, 7);
+
+  /// 长按条目弹出的操作菜单。
+  Future<void> _showEntryActions(Entry entry) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('timeline-action-edit'),
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('编辑'),
+              onTap: () => Navigator.pop(context, 'edit'),
+            ),
+            ListTile(
+              key: const Key('timeline-action-delete'),
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('删除'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'edit') {
+      widget.onEdit(entry);
+    } else if (action == 'delete') {
+      await _deleteEntry(entry);
+    }
+  }
+
+  /// 删除一条记录：确认后软删除，并给出撤销入口。
+  Future<void> _deleteEntry(Entry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除这条记录？'),
+        content: Text(_deleteDialogBody(entry.content)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const Key('timeline-delete-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    // SnackBar 挂在 app 级的 ScaffoldMessenger 上，可能比这个页面活得久
+    // （切 Tab 会重建 TimelinePage）。把仓储取到局部变量，撤销回调就不依赖
+    // 可能已卸载的 State，也不会在 State defunct 后再碰 widget。
+    final repository = widget.repository;
+    try {
+      await repository.softDelete(entry.id);
+    } catch (error) {
+      debugPrint('删除失败：$error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('删除失败，这条记录仍在')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _entries.removeWhere((item) => item.id == entry.id);
+    });
+    // 通知调用方这条记录进了回收站：调用方可能正编辑着它，得把编辑器复位，
+    // 否则界面会继续显示「已保存」，而记录在回顾页里已经看不见了。
+    widget.onDelete?.call(entry);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('已移到回收站'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => unawaited(_restoreEntry(entry, repository)),
+        ),
+      ),
+    );
+  }
+
+  /// 撤销删除：把条目放回列表。
+  ///
+  /// 仓储由调用方传入而不是从 `widget` 取：撤销入口挂在 app 级的
+  /// ScaffoldMessenger 上，页面此时可能已经卸载，State defunct 后再碰
+  /// `widget` 不可靠。页面已卸载时只恢复数据库，界面刷新交给用户重新
+  /// 进入回顾页，数据不会丢。
+  Future<void> _restoreEntry(
+    Entry entry,
+    LocalEntryRepository repository,
+  ) async {
+    try {
+      await repository.restore(entry.id);
+    } catch (error) {
+      debugPrint('恢复失败：$error');
+      // 恢复失败必须让用户看见：只 debugPrint 的话，用户点了撤销却看不到
+      // 条目回来，以为撤销没生效。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('恢复失败，请到回收站重试')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _entries.insert(_insertPosition(entry), entry);
+    });
+  }
+
+  /// 条目在列表中的插入位置：按创建时间倒序、同刻按 ID 倒序。
+  ///
+  /// 时间比较用毫秒 epoch，与仓储层 [LocalEntryRepository.list] 的排序口径一致，
+  /// 避免微秒精度差异把条目插到错误的位置。
+  int _insertPosition(Entry entry) {
+    final target = entry.createdAt.millisecondsSinceEpoch;
+    var index = 0;
+    while (index < _entries.length) {
+      final current = _entries[index];
+      final time = current.createdAt.millisecondsSinceEpoch.compareTo(target);
+      if (time == 0) {
+        if (current.id.compareTo(entry.id) <= 0) break;
+      } else if (time < 0) {
+        break;
+      }
+      index++;
+    }
+    return index;
+  }
+
+  /// 确认对话框的正文：内容摘要 + 回收站提示。
+  ///
+  /// 摘要为空时不写摘要，也就不留前导空行，否则对话框正文会以两个
+  /// 空行开头。
+  String _deleteDialogBody(String content) {
+    final snippet = _snippet(content);
+    const hint = '删除后可在回收站找回。';
+    return snippet.isEmpty ? hint : '$snippet\n\n$hint';
+  }
+
+  /// 确认对话框里的内容摘要。
+  String _snippet(String content) {
+    final flat = content.replaceAll('\n', ' ').trim();
+    return flat.length <= 20 ? flat : '${flat.substring(0, 20)}…';
+  }
 
   /// 取可安全显示的日期键，格式固定为 `YYYY-MM-DD`。
   ///
@@ -185,6 +343,7 @@ class _TimelinePageState extends State<TimelinePage> {
                   final showMonth =
                       index == 0 || _monthOf(_entries[index - 1]) != month;
                   final time = entry.createdAt.toLocal();
+                  final emoji = emojiOf(entry.mood);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -200,6 +359,7 @@ class _TimelinePageState extends State<TimelinePage> {
                         elevation: 0,
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
+                          leading: emoji.isEmpty ? null : Text(emoji),
                           title: Text(
                             entry.content,
                             maxLines: 4,
@@ -213,6 +373,7 @@ class _TimelinePageState extends State<TimelinePage> {
                             ),
                           ),
                           onTap: () => widget.onEdit(entry),
+                          onLongPress: () => _showEntryActions(entry),
                         ),
                       ),
                     ],

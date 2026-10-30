@@ -183,7 +183,7 @@ void main() {
     await tester.tap(find.text('从备份恢复'));
     await tester.pumpAndSettle();
 
-    expect(find.text('这不是本应用的备份文件'), findsOneWidget);
+    expect(find.text(BackupCodec.notOurBackupReason), findsOneWidget);
     expect(repo.entries, isEmpty);
   });
 

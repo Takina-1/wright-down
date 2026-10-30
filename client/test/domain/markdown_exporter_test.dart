@@ -23,7 +23,7 @@ void main() {
       exportedAt: DateTime.utc(2026, 10, 29, 4),
     );
     expect(markdown, contains('# 本地日记导出'));
-    expect(markdown, contains('entryCount: 0'));
+    expect(markdown, contains('entryCount: 0\n'));
   });
 
   test('one entry shows its day and local time', () {
@@ -128,5 +128,91 @@ void main() {
       entry('b', '第二条', createdAt: DateTime(2026, 10, 28, 9)),
     ], exportedAt: DateTime.utc(2026, 10, 29, 4));
     expect(markdown, contains('**10:00**　第一条\n\n**09:00**　第二条'));
+  });
+
+  test('已删除的条目不进入可读导出', () {
+    final deleted = Entry(
+      id: 'a',
+      content: '写错了',
+      createdAt: DateTime.utc(2026, 10, 28, 3),
+      updatedAt: DateTime.utc(2026, 10, 30, 1),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 10, 30, 1),
+    );
+    final live = Entry(
+      id: 'b',
+      content: '正常记录',
+      createdAt: DateTime.utc(2026, 10, 29, 3),
+      updatedAt: DateTime.utc(2026, 10, 29, 3),
+      dayKey: '2026-10-29',
+    );
+
+    final markdown = const MarkdownExporter().render([deleted, live]);
+
+    expect(markdown, isNot(contains('写错了')));
+    expect(markdown, contains('正常记录'));
+    expect(markdown, contains('entryCount: 1\n'));
+  });
+
+  test('visibleCount 与渲染条数一致', () {
+    final entries = [
+      Entry(
+        id: 'a',
+        content: '已删除',
+        createdAt: DateTime.utc(2026, 10, 28, 3),
+        updatedAt: DateTime.utc(2026, 10, 28, 3),
+        dayKey: '2026-10-28',
+        deletedAt: DateTime.utc(2026, 10, 30, 1),
+      ),
+      Entry(
+        id: 'b',
+        content: '正常',
+        createdAt: DateTime.utc(2026, 10, 29, 3),
+        updatedAt: DateTime.utc(2026, 10, 29, 3),
+        dayKey: '2026-10-29',
+      ),
+    ];
+    expect(const MarkdownExporter().visibleCount(entries), 1);
+  });
+
+  test('全部条目都已删除时导出只剩头部', () {
+    final deleted = Entry(
+      id: 'a',
+      content: '写错了',
+      createdAt: DateTime.utc(2026, 10, 28, 3),
+      updatedAt: DateTime.utc(2026, 10, 30, 1),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 10, 30, 1),
+    );
+
+    final markdown = const MarkdownExporter().render([deleted]);
+
+    expect(markdown, isNot(contains('写错了')));
+    expect(markdown, contains('entryCount: 0\n'));
+    expect(markdown, isNot(contains('## 2026-10-28')));
+  });
+
+  test('已删除条目原本独占的日期分组也不出现', () {
+    final deleted = Entry(
+      id: 'a',
+      content: '另一天的写错了',
+      createdAt: DateTime.utc(2026, 10, 27, 3),
+      updatedAt: DateTime.utc(2026, 10, 30, 1),
+      dayKey: '2026-10-27',
+      deletedAt: DateTime.utc(2026, 10, 30, 1),
+    );
+    final live = Entry(
+      id: 'b',
+      content: '正常记录',
+      createdAt: DateTime.utc(2026, 10, 29, 3),
+      updatedAt: DateTime.utc(2026, 10, 29, 3),
+      dayKey: '2026-10-29',
+    );
+
+    final markdown = const MarkdownExporter().render([deleted, live]);
+
+    expect(markdown, isNot(contains('## 2026-10-27')));
+    expect(markdown, contains('## 2026-10-29'));
+    expect(markdown, contains('entryCount: 1\n'));
   });
 }

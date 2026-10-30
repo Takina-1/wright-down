@@ -117,4 +117,73 @@ void main() {
     expect(note.data, contains('尚未保存时强制终止应用可能丢失最近输入'));
     expect(note.data, isNot(contains('尚未提供导出与备份')));
   });
+
+  testWidgets('the mine page has a trash entry', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('回收站'), findsOneWidget);
+  });
+
+  testWidgets('tapping the trash entry opens the trash page', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('回收站'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('回收站是空的'), findsOneWidget);
+  });
+
+  testWidgets('the local data note explains deletion and the trash', (
+    tester,
+  ) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('本地数据说明'));
+    await tester.pumpAndSettle();
+
+    final note = tester.widget<Text>(find.byKey(const Key('local-data-note')));
+    // 断言到句子级别：只锁「回收站」这个词锁不住真正的删除语义。
+    expect(note.data, contains('删除的记录会先放进回收站，可以随时恢复'));
+    expect(
+      note.data,
+      contains('记录会从本机数据库移除，之后导出的备份不再包含它'),
+    );
+    // 彻底删除后并不是永远消失：导入旧备份仍会让这条记录重新出现。
+    expect(
+      note.data,
+      contains('如果导入的是彻底删除之前的旧备份，这条记录仍会重新出现'),
+    );
+    // 旧文案里那句错的承诺不能留下。
+    expect(note.data, isNot(contains('无法通过备份找回')));
+  });
+
+  testWidgets('the mine page lists the entries in order with the trash icon', (
+    tester,
+  ) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    // 本页只有这三个入口 ListTile，顺序和图标都不能被悄悄改掉。
+    final titles = tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .map((tile) => (tile.title as Text).data)
+        .toList();
+    expect(titles, ['导出与备份', '回收站', '本地数据说明']);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+  });
 }
