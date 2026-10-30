@@ -135,6 +135,42 @@ class EntryEditorController extends ChangeNotifier {
     return true;
   }
 
+  /// 当前是否正在编辑一条已保存的条目。新记录没有可删除的对象。
+  bool get canDelete => _persisted && _id != null;
+
+  /// 当前编辑的条目 ID；编辑新记录时为 null。
+  String? get currentEntryId => _id;
+
+  /// 删除当前编辑的条目。
+  ///
+  /// 先把未保存的修改落盘再删除，删除成功后编辑器复位为空白的新记录。
+  /// 返回 true 表示删除成功；不是已保存的条目或删除失败时返回 false。
+  Future<bool> deleteCurrent() async {
+    if (_disposed) return false;
+    final id = _id;
+    if (id == null || !_persisted) return false;
+    // 有未保存的修改时先落盘，免得删除把刚写的内容一起丢掉。
+    if (!await flush()) return false;
+    try {
+      await repository.softDelete(id);
+    } catch (error) {
+      debugPrint('删除失败：$error');
+      _status = SaveStatus.error;
+      _error = '删除失败，这条记录仍在。';
+      _notify();
+      return false;
+    }
+    _timer?.cancel();
+    _content = _savedContent = '';
+    _id = _dayKey = null;
+    _createdAt = null;
+    _persisted = false;
+    _error = null;
+    _status = SaveStatus.empty;
+    _notify();
+    return true;
+  }
+
   @override
   void dispose() {
     _disposed = true;
