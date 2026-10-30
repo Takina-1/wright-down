@@ -149,8 +149,10 @@ class EntryEditorController extends ChangeNotifier {
     if (_disposed) return false;
     final id = _id;
     if (id == null || !_persisted) return false;
-    // 有未保存的修改时先落盘，免得删除把刚写的内容一起丢掉。
-    if (!await flush()) return false;
+    // 正文非空时先落盘，免得删除把刚写的内容一起丢掉。
+    // 正文为空时跳过落盘：保存会因为「正文不能为空」失败，
+    // 但用户要的是把这条记录删掉，不该被针对保存的规则拦住。
+    if (_content.trim().isNotEmpty && !await flush()) return false;
     try {
       await repository.softDelete(id);
     } catch (error) {

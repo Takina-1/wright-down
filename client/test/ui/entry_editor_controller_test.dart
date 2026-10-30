@@ -168,6 +168,36 @@ void main() {
     expect(repo.entries['saved-1']!.deletedAt, isNull);
   });
 
+  test('正文被清空后仍能删除', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+
+    // 清空正文：这是「保存」规则会拒绝的场景，但删除必须放行。
+    controller.updateContent('');
+    expect(controller.status, SaveStatus.editing);
+
+    expect(await controller.deleteCurrent(), isTrue);
+
+    expect(controller.content, isEmpty);
+    expect(controller.canDelete, isFalse);
+    expect(repo.entries['saved-1']!.deletedAt, isNotNull);
+    // 正文为空时跳过落盘，库里留的还是删除前的内容。
+    expect(repo.entries['saved-1']!.content, '原内容');
+  });
+
   test('删除前先落盘未保存的修改', () async {
     final controller = EntryEditorController(
       repository: repo,
