@@ -16,12 +16,27 @@ class BackupFormatException implements Exception {
 class BackupCodec {
   const BackupCodec();
 
-  /// 时间串必须带时区标记，否则同一份文件在不同设备会解出不同的绝对时刻。
-  static final RegExp _offsetPattern = RegExp(r'[+-]\d{2}:\d{2}$');
+  /// 备份文件无法识别或已损坏时给用户看的原因。
+  static const String damagedReason = '备份文件已损坏，无法恢复';
+
+  /// 文件不是本应用的备份时给用户看的原因。
+  static const String notOurBackupReason = '这不是本应用的备份文件';
+
+  /// 备份来自比当前应用更新的版本时给用户看的原因。
+  static const String newerVersionReason = '备份来自更新的版本，请先升级应用';
+
+  /// 条目数据不完整、不能写进备份时给用户看的原因。
+  static const String incompleteEntryReason = '有条记录数据不完整，无法导出';
 
   String encode(List<Entry> entries, {DateTime? exportedAt}) {
+    final seenIds = <String>{};
     for (final entry in entries) {
       _validateEntry(entry);
+      // 解码侧拒绝重复 ID，编码侧同样要拦住：
+      // 否则会写出一份自家 decode 必然拒绝的备份。
+      if (!seenIds.add(entry.id)) {
+        throw const BackupFormatException(incompleteEntryReason);
+      }
     }
     final document = <String, Object?>{
       'format': kBackupFormat,
@@ -38,33 +53,33 @@ class BackupCodec {
     try {
       raw = jsonDecode(text);
     } on FormatException {
-      throw const BackupFormatException('这不是本应用的备份文件');
+      throw const BackupFormatException(notOurBackupReason);
     } catch (_) {
       // 畸形 JSON 可能抛出非 FormatException，统一按损坏处理，
       // 保证界面总能映射到一句用户能看懂的话。
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     if (raw is! Map<String, Object?> || raw['format'] != kBackupFormat) {
-      throw const BackupFormatException('这不是本应用的备份文件');
+      throw const BackupFormatException(notOurBackupReason);
     }
     final version = raw['version'];
     if (version is! int) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     if (version > kBackupVersion) {
-      throw const BackupFormatException('备份来自更新的版本，请先升级应用');
+      throw const BackupFormatException(newerVersionReason);
     }
     if (version < kMinBackupVersion) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final rawEntries = raw['entries'];
     if (rawEntries is! List) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final entryCount = raw['entryCount'];
     // 条数对不上说明文件被截断或改过，不接受这种备份。
     if (entryCount is! int || entryCount != rawEntries.length) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final entries = <Entry>[];
     final seenIds = <String>{};
@@ -72,7 +87,7 @@ class BackupCodec {
       final entry = _decodeEntry(item);
       // 合法备份的 ID 是主键，不会重复；重复说明文件已损坏。
       if (!seenIds.add(entry.id)) {
-        throw const BackupFormatException('备份文件已损坏，无法恢复');
+        throw const BackupFormatException(damagedReason);
       }
       entries.add(entry);
     }
@@ -101,7 +116,7 @@ class BackupCodec {
 
   Entry _decodeEntry(Object? raw) {
     if (raw is! Map<String, Object?>) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final id = raw['id'];
     final content = raw['content'];
@@ -112,7 +127,7 @@ class BackupCodec {
         content.trim().isEmpty ||
         dayKey is! String ||
         !isValidDayKey(dayKey)) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final rawDeletedAt = raw['deletedAt'];
     return Entry(
@@ -130,20 +145,21 @@ class BackupCodec {
     if (entry.id.isEmpty ||
         entry.content.trim().isEmpty ||
         !isValidDayKey(entry.dayKey)) {
-      throw const BackupFormatException('有条记录数据不完整，无法导出');
+      throw const BackupFormatException(incompleteEntryReason);
     }
   }
 
+  /// 时间串必须带 `Z` 或显式时区偏移，否则同一份文件在不同设备会解出不同的绝对时刻。
+  ///
+  /// 判定只认解析结果：带 `Z` 或偏移（`+08:00`、`+0800`、`+08`）的时间串解出来是 UTC，
+  /// 不带时区的时间串解出来是本地时间，`isUtc` 为 false，正好能把两者分开。
   DateTime _parseDate(Object? raw) {
     if (raw is! String) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
-    }
-    if (!raw.endsWith('Z') && !_offsetPattern.hasMatch(raw)) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+      throw const BackupFormatException(damagedReason);
     }
     final parsed = DateTime.tryParse(raw);
-    if (parsed == null) {
-      throw const BackupFormatException('备份文件已损坏，无法恢复');
+    if (parsed == null || !parsed.isUtc) {
+      throw const BackupFormatException(damagedReason);
     }
     return parsed.toUtc();
   }

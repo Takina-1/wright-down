@@ -42,7 +42,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '这不是本应用的备份文件',
+          BackupCodec.notOurBackupReason,
         ),
       ),
     );
@@ -55,7 +55,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '这不是本应用的备份文件',
+          BackupCodec.notOurBackupReason,
         ),
       ),
     );
@@ -70,7 +70,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '备份来自更新的版本，请先升级应用',
+          BackupCodec.newerVersionReason,
         ),
       ),
     );
@@ -90,7 +90,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '备份文件已损坏，无法恢复',
+          BackupCodec.damagedReason,
         ),
       ),
     );
@@ -110,7 +110,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '备份文件已损坏，无法恢复',
+          BackupCodec.damagedReason,
         ),
       ),
     );
@@ -129,7 +129,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '备份文件已损坏，无法恢复',
+          BackupCodec.damagedReason,
         ),
       ),
     );
@@ -154,7 +154,7 @@ void main() {
         isA<BackupFormatException>().having(
           (e) => e.reason,
           'reason',
-          '备份文件已损坏，无法恢复',
+          BackupCodec.damagedReason,
         ),
       ),
     );
@@ -180,7 +180,7 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '备份文件已损坏，无法恢复',
+            BackupCodec.damagedReason,
           ),
         ),
       );
@@ -205,7 +205,7 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '备份文件已损坏，无法恢复',
+            BackupCodec.damagedReason,
           ),
         ),
         reason: 'dayKey "$bad" 必须被整体拒绝',
@@ -222,7 +222,8 @@ void main() {
         createdAt: DateTime.utc(2026, 10, 28, 3),
         updatedAt: DateTime.utc(2026, 10, 30, 1),
         dayKey: '2026-10-28',
-        deletedAt: DateTime.utc(2026, 10, 30, 1),
+        // 与 updatedAt 取不同值：否则实现把两个键写反了用例也发现不了。
+        deletedAt: DateTime.utc(2026, 10, 30, 5),
       );
       final live = Entry(
         id: 'b',
@@ -239,7 +240,9 @@ void main() {
       final document = codec.decode(text);
       expect(document.version, 2);
       expect(document.entries, hasLength(2));
-      expect(document.entries.first.deletedAt, DateTime.utc(2026, 10, 30, 1));
+      expect(document.entries.first.deletedAt, DateTime.utc(2026, 10, 30, 5));
+      // 锁死 deletedAt 与 updatedAt 不会互换。
+      expect(document.entries.first.updatedAt, DateTime.utc(2026, 10, 30, 1));
       expect(document.entries.last.deletedAt, isNull);
     });
 
@@ -284,7 +287,7 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '备份来自更新的版本，请先升级应用',
+            BackupCodec.newerVersionReason,
           ),
         ),
       );
@@ -307,6 +310,64 @@ void main() {
           '"exportedAt":"2026-10-28T02:00:00","entryCount":0,"entries":[]}',
         ),
         throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('纯日期时间串判损坏', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":2,'
+          '"exportedAt":"2026-10-28","entryCount":0,"entries":[]}',
+        ),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('带显式时区偏移的时间串可以解码', () {
+      // 各种合法偏移写法都要接受：写备份的工具不一定是本应用。
+      for (final offset in ['Z', '+08:00', '+0800', '+08', '-05:00', '-0500']) {
+        final document = const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":2,'
+          '"exportedAt":"2026-10-28T02:00:00$offset","entryCount":0,"entries":[]}',
+        );
+        expect(document.exportedAt.isUtc, isTrue, reason: '偏移 $offset 应解成 UTC');
+      }
+    });
+
+    test('偏移时间串解出的绝对时刻与本地时区无关', () {
+      final document = const BackupCodec().decode(
+        '{"format":"local-diary-backup","version":2,'
+        '"exportedAt":"2026-10-28T02:00:00+0800","entryCount":0,"entries":[]}',
+      );
+      expect(document.exportedAt, DateTime.utc(2026, 10, 27, 18));
+    });
+
+    test('编码时遇到重复 id 拒绝导出', () {
+      final duplicated = [
+        Entry(
+          id: 'a',
+          content: '第一条',
+          createdAt: DateTime.utc(2026, 10, 28, 3),
+          updatedAt: DateTime.utc(2026, 10, 28, 3),
+          dayKey: '2026-10-28',
+        ),
+        Entry(
+          id: 'a',
+          content: '重复 id 的另一条',
+          createdAt: DateTime.utc(2026, 10, 29, 3),
+          updatedAt: DateTime.utc(2026, 10, 29, 3),
+          dayKey: '2026-10-29',
+        ),
+      ];
+      expect(
+        () => const BackupCodec().encode(duplicated),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            BackupCodec.incompleteEntryReason,
+          ),
+        ),
       );
     });
 
@@ -347,7 +408,7 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '有条记录数据不完整，无法导出',
+            BackupCodec.incompleteEntryReason,
           ),
         ),
       );
@@ -368,7 +429,7 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '有条记录数据不完整，无法导出',
+            BackupCodec.incompleteEntryReason,
           ),
         ),
       );
@@ -403,10 +464,19 @@ void main() {
           isA<BackupFormatException>().having(
             (e) => e.reason,
             'reason',
-            '这不是本应用的备份文件',
+            BackupCodec.notOurBackupReason,
           ),
         ),
       );
+    });
+
+    test('给用户看的文案固定不变', () {
+      // 其它用例都引用常量，这里锁死常量本身的值：
+      // 改文案时这一条会失败，提醒同步更新界面上依赖文案的用例。
+      expect(BackupCodec.damagedReason, '备份文件已损坏，无法恢复');
+      expect(BackupCodec.notOurBackupReason, '这不是本应用的备份文件');
+      expect(BackupCodec.newerVersionReason, '备份来自更新的版本，请先升级应用');
+      expect(BackupCodec.incompleteEntryReason, '有条记录数据不完整，无法导出');
     });
   });
 }

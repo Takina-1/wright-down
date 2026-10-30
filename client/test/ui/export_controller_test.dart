@@ -274,7 +274,7 @@ void main() {
 
       expect(preview, isNull);
       expect(controller.status, ExportStatus.failure);
-      expect(controller.message, '这不是本应用的备份文件');
+      expect(controller.message, BackupCodec.notOurBackupReason);
       expect(repo.entries, isEmpty);
     },
   );
