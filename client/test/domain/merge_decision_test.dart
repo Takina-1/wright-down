@@ -6,14 +6,17 @@ void main() {
   Entry entry({
     String id = 'a',
     String content = '正文',
+    DateTime? createdAt,
     DateTime? updatedAt,
+    String? dayKey,
     DateTime? deletedAt,
   }) => Entry(
     id: id,
     content: content,
-    createdAt: DateTime.utc(2026, 10, 28, 3),
+    // 创建时属性默认可传，测试里要能故意让本地与备份不同。
+    createdAt: createdAt ?? DateTime.utc(2026, 10, 28, 3),
     updatedAt: updatedAt ?? DateTime.utc(2026, 10, 28, 3),
-    dayKey: '2026-10-28',
+    dayKey: dayKey ?? '2026-10-28',
     deletedAt: deletedAt,
   );
 
@@ -32,13 +35,25 @@ void main() {
   });
 
   test('备份更新时更新正文，创建时间以本地为准', () {
+    // 本地与备份的创建时属性故意不同：这样断言「以本地为准」才真的能区分，
+    // 写错成 incoming 的值时这条用例会变红。
     final decision = decideMerge(
-      local: entry(content: '旧正文'),
-      incoming: entry(content: '新正文', updatedAt: DateTime.utc(2026, 11, 1)),
+      local: entry(
+        content: '旧正文',
+        createdAt: DateTime.utc(2026, 10, 28),
+        dayKey: '2026-10-28',
+      ),
+      incoming: entry(
+        content: '新正文',
+        createdAt: DateTime.utc(2026, 9, 1),
+        dayKey: '2026-09-01',
+        updatedAt: DateTime.utc(2026, 11, 1),
+      ),
     );
     expect(decision.action, MergeAction.update);
     expect(decision.entry.content, '新正文');
-    expect(decision.entry.createdAt, DateTime.utc(2026, 10, 28, 3));
+    expect(decision.entry.createdAt, DateTime.utc(2026, 10, 28));
+    expect(decision.entry.dayKey, '2026-10-28');
   });
 
   test('备份更新且带删除标记时，本地条目变为已删除', () {
@@ -62,9 +77,36 @@ void main() {
   });
 
   test('毫秒精度比较：同一毫秒内不更新', () {
+    // 两个时间戳完全相同，落在同一毫秒内：无论怎么比都不该更新。
+    final stamp = DateTime.utc(2026, 11, 1, 0, 0, 0, 0, 500);
     final decision = decideMerge(
-      local: entry(updatedAt: DateTime.utc(2026, 11, 1, 0, 0, 0, 500)),
-      incoming: entry(updatedAt: DateTime.utc(2026, 11, 1, 0, 0, 0, 500)),
+      local: entry(updatedAt: stamp),
+      incoming: entry(updatedAt: stamp),
+    );
+    expect(decision.action, MergeAction.skip);
+  });
+
+  test('毫秒精度比较：备份比本地晚 500 微秒也不算更新', () {
+    // 备份在微秒精度上确实更晚，但两者的毫秒数相同：
+    // 按毫秒比较应判定为「不比本地新」而跳过。
+    // 若把比较改回 isAfter，这条用例会变红。
+    final local = DateTime.utc(2026, 11, 1, 0, 0, 0, 0, 0);
+    final incoming = DateTime.utc(2026, 11, 1, 0, 0, 0, 0, 500);
+    expect(incoming.millisecondsSinceEpoch, local.millisecondsSinceEpoch);
+    final decision = decideMerge(
+      local: entry(updatedAt: local),
+      incoming: entry(updatedAt: incoming),
+    );
+    expect(decision.action, MergeAction.skip);
+  });
+
+  test('毫秒精度比较：备份比本地早 500 微秒也不算更新', () {
+    final local = DateTime.utc(2026, 11, 1, 0, 0, 0, 0, 500);
+    final incoming = DateTime.utc(2026, 11, 1, 0, 0, 0, 0, 0);
+    expect(incoming.millisecondsSinceEpoch, local.millisecondsSinceEpoch);
+    final decision = decideMerge(
+      local: entry(updatedAt: local),
+      incoming: entry(updatedAt: incoming),
     );
     expect(decision.action, MergeAction.skip);
   });

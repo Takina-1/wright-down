@@ -22,11 +22,15 @@ class RestorePreview {
 /// 判断规则由 [decideMerge] 统一提供，与仓储层的合并实现完全一致：
 /// 预览的条数和实际导入的条数不会对不上。
 ///
-/// 前置条件：[local] 必须包含本地已删除的条目。调用方要传入仓储的
-/// `exportAll()` 结果（它不过滤已删除条目），否则预览会漏掉「本地已删除、
+/// 前置条件：[localAll] 必须包含本地已删除的条目。调用方要传入仓储的
+/// `exportAll()` 结果（它不过滤已删除条目），而不是 `repository.list()`
+/// （后者过滤掉了已删除条目），否则预览会漏掉「本地已删除、
 /// 备份未删除」这一条——预览说会更新，实际导入却会跳过，两边数字对不上。
-RestorePreview compareRestore(List<Entry> local, List<Entry> incoming) {
-  final byId = {for (final entry in local) entry.id: entry};
+RestorePreview compareRestore(
+  List<Entry> localAll,
+  List<Entry> incoming,
+) {
+  final byId = {for (final entry in localAll) entry.id: entry};
   var inserted = 0;
   var updated = 0;
   var skipped = 0;

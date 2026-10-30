@@ -17,12 +17,14 @@ void main() {
     DateTime? createdAt,
     DateTime? updatedAt,
     String dayKey = '2026-10-28',
+    DateTime? deletedAt,
   }) => Entry(
     id: id,
     content: content,
     createdAt: createdAt ?? time,
     updatedAt: updatedAt ?? time,
     dayKey: dayKey,
+    deletedAt: deletedAt,
   );
 
   setUp(() async {
@@ -227,5 +229,60 @@ void main() {
     expect(summary.inserted, 1);
     expect(await repo.list(), isEmpty);
     expect((await repo.listDeleted()).single.id, 'a');
+  });
+
+  test('过期备份带着删除标记也不会把本地活着的条目拖进回收站', () async {
+    // 合并表第 4 行的跳过分支：本地活着 + 备份已删除，但备份不比本地新。
+    await repo.save(entry('a', '本机内容', updatedAt: time));
+
+    final summary = await repo.importAll([
+      entry(
+        'a',
+        '备份里的正文',
+        updatedAt: time.subtract(const Duration(minutes: 10)),
+        deletedAt: time.subtract(const Duration(minutes: 10)),
+      ),
+    ]);
+
+    expect(summary.skipped, 1);
+    expect(summary.updated, 0);
+    expect(summary.inserted, 0);
+    // 条目仍然活着：既没被更新，也没被拖进回收站。
+    final alive = (await repo.list()).single;
+    expect(alive.id, 'a');
+    expect(alive.content, '本机内容');
+    expect(await repo.listDeleted(), isEmpty);
+  });
+
+  test('本地已删除且备份也带删除标记时按备份的删除时刻更新', () async {
+    // 合并表第 6 行：本地已删除 + 备份已删除 + 备份更新 → 更新删除时刻。
+    await repo.save(entry('a', '本机内容', updatedAt: time));
+    await repo.softDelete('a');
+    final localDeleted = (await repo.listDeleted()).single.deletedAt;
+
+    // 删除时刻取「当前时间 + 一天」，保证比 softDelete 写下的时刻新，
+    // 且不受测试运行日期影响。
+    final backupDeletedAt = DateTime.fromMillisecondsSinceEpoch(
+      DateTime.now().toUtc().millisecondsSinceEpoch + const Duration(days: 1).inMilliseconds,
+      isUtc: true,
+    );
+    final summary = await repo.importAll([
+      entry(
+        'a',
+        '备份里的正文',
+        updatedAt: backupDeletedAt,
+        deletedAt: backupDeletedAt,
+      ),
+    ]);
+
+    expect(summary.updated, 1);
+    expect(summary.skipped, 0);
+    // 条目仍在回收站里，没有复活。
+    expect(await repo.list(), isEmpty);
+    final deleted = (await repo.listDeleted()).single;
+    expect(deleted.id, 'a');
+    // 删除时刻以备份为准，而不是本地 softDelete 时写下的那个。
+    expect(deleted.deletedAt, backupDeletedAt);
+    expect(deleted.deletedAt, isNot(localDeleted));
   });
 }

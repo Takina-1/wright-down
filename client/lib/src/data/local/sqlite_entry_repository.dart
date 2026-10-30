@@ -273,6 +273,9 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 'content': decision.entry.content,
                 'updated_at': decision.entry.updatedAt.millisecondsSinceEpoch,
                 // 删除状态跟备份走：备份带删除标记就把本地条目标记为已删除。
+                // 「已删除的条目不被未删除的备份复活」由 decideMerge 的规则 2
+                // 保证：本地已删除而备份未删除时根本走不到这个分支，
+                // 所以这里写 null 只是保持列完整，不会取消删除标记。
                 'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
               },
               where: 'id = ?',

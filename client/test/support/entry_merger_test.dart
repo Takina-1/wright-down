@@ -6,12 +6,17 @@ import 'entry_merger.dart';
 void main() {
   final time = DateTime.utc(2026, 10, 28, 8);
 
-  Entry entry(String id, {DateTime? updatedAt}) => Entry(
+  Entry entry(
+    String id, {
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? dayKey,
+  }) => Entry(
     id: id,
     content: '内容 $id',
-    createdAt: time,
+    createdAt: createdAt ?? time,
     updatedAt: updatedAt ?? time,
-    dayKey: '2026-10-28',
+    dayKey: dayKey ?? '2026-10-28',
   );
 
   test('an entry without an id aborts the whole merge', () {
@@ -111,5 +116,27 @@ void main() {
     ]);
     expect(summary.inserted, 1);
     expect(store['a']!.deletedAt, deletedAt);
+  });
+
+  test('导入更新不会改写创建时间与日期键', () {
+    // 备份里的创建时间与日期键故意不同：合并结果必须保留本地的值，
+    // 否则替身写进 store 的就是备份的创建时属性，与生产仓储的语义漂移。
+    final localCreatedAt = DateTime.utc(2026, 10, 28, 8);
+    final store = <String, Entry>{
+      'a': entry('a', createdAt: localCreatedAt, dayKey: '2026-10-28'),
+    };
+    final summary = mergeEntries(store, [
+      entry(
+        'a',
+        createdAt: DateTime.utc(2026, 9, 1),
+        dayKey: '2026-09-01',
+        updatedAt: time.add(const Duration(minutes: 5)),
+      ),
+    ]);
+    expect(summary.updated, 1);
+    expect(summary.skipped, 0);
+    expect(store['a']!.content, '内容 a');
+    expect(store['a']!.createdAt, localCreatedAt);
+    expect(store['a']!.dayKey, '2026-10-28');
   });
 }
