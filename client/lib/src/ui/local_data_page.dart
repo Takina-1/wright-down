@@ -4,6 +4,7 @@ import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import '../platform/saf_file_gateway.dart';
 import 'export_page.dart';
+import 'trash_page.dart';
 
 class LocalDataPage extends StatelessWidget {
   const LocalDataPage({super.key, required this.repository, this.fileGateway});
@@ -58,6 +59,17 @@ class LocalDataPage extends StatelessWidget {
       ),
       ListTile(
         contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.delete_outline),
+        title: const Text('回收站'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (context) => TrashPage(repository: repository),
+          ),
+        ),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.privacy_tip_outlined),
         title: const Text('本地数据说明'),
         trailing: const Icon(Icons.chevron_right),
@@ -72,6 +84,8 @@ class LocalDataPage extends StatelessWidget {
                   '当前版本保存日记正文和记录时间，使用应用内的本地数据库。\n\n'
                   '本版本不包含账号、应用内云同步、广告或行为统计，也不会申请麦克风、相机和相册权限。\n\n'
                   '看到“已保存”表示内容已写入本地数据库；尚未保存时强制终止应用可能丢失最近输入。\n\n'
+                  '删除的记录会先放进回收站，可以随时恢复；在回收站里彻底删除或清空回收站后，'
+                  '记录才真正从本机移除，届时无法通过备份找回。\n\n'
                   '在「导出与备份」里可以手动导出备份文件和 Markdown 文件，'
                   '两者都是明文、不做加密，任何文本编辑器都能打开，请自行保管。'
                   '应用不会自动备份，卸载应用或清除数据仍会丢失未导出的记录。',

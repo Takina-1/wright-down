@@ -117,4 +117,43 @@ void main() {
     expect(note.data, contains('尚未保存时强制终止应用可能丢失最近输入'));
     expect(note.data, isNot(contains('尚未提供导出与备份')));
   });
+
+  testWidgets('the mine page has a trash entry', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('回收站'), findsOneWidget);
+  });
+
+  testWidgets('tapping the trash entry opens the trash page', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('回收站'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('回收站是空的'), findsOneWidget);
+  });
+
+  testWidgets('the local data note explains deletion and the trash', (
+    tester,
+  ) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: LocalDataPage(repository: repo))),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('本地数据说明'));
+    await tester.pumpAndSettle();
+
+    final note = tester.widget<Text>(find.byKey(const Key('local-data-note')));
+    expect(note.data, contains('回收站'));
+  });
 }
