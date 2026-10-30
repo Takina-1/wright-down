@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/entry.dart';
 import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
+import '../domain/mood.dart';
 import 'entry_editor_controller.dart';
 import 'local_data_page.dart';
 import 'timeline_page.dart';
@@ -94,6 +95,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _transitioning = false;
     });
     _focus.requestFocus();
+  }
+
+  /// 心情选择弹层：列 5 种心情，已设时额外提供「清除」。
+  ///
+  /// 清除用空串作哨兵值：弹层返回类型是 [String?]，区分「取消」（null）
+  /// 与「清除」（空串），调用方据此决定 setMood(null) 还是 setMood(picked)。
+  Future<void> _showMoodSheet() async {
+    final picked = await showModalBottomSheet<String?>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...allMoods.map((m) {
+              final sel = _editor.mood == m.name;
+              return ListTile(
+                leading: Text(emojiOf(m.name)),
+                title: Text(labelOf(m.name)),
+                trailing: sel ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(context, m.name),
+              );
+            }),
+            if (_editor.mood != null)
+              ListTile(
+                leading: const Icon(Icons.clear_outlined),
+                title: const Text('清除'),
+                onTap: () => Navigator.pop(context, ''),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (picked == null) return; // 取消
+    _editor.setMood(picked.isEmpty ? null : picked);
   }
 
   Future<void> _edit(Entry entry) async {
@@ -363,6 +399,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               onChanged: _editor.updateContent,
             ),
+          ),
+          Row(
+            children: [
+              IconButton(
+                key: const Key('mood-entry'),
+                icon: Text(_editor.mood == null ? '😊' : emojiOf(_editor.mood)),
+                onPressed: _transitioning ? null : _showMoodSheet,
+              ),
+            ],
           ),
           if (_editor.error != null) ...[
             Text(
