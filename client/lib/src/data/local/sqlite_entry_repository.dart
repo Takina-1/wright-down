@@ -39,11 +39,16 @@ class SqliteEntryRepository implements LocalEntryRepository {
           },
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 2) {
-              // 加一个可空列即可：老行读出来是 NULL，等价于「未删除」，
-              // 不需要重写任何数据。
-              await db.execute(
-                'ALTER TABLE entries ADD COLUMN deleted_at INTEGER',
-              );
+              // 迁移必须幂等：用户若用旧版打开过，列可能已经在了
+              // （sqflite 在没有 onDowngrade 时只改 user_version，不改表结构）。
+              // 撞名会让整库再也打不开。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasDeletedAt = columns.any((row) => row['name'] == 'deleted_at');
+              if (!hasDeletedAt) {
+                await db.execute(
+                  'ALTER TABLE entries ADD COLUMN deleted_at INTEGER',
+                );
+              }
               await db.execute(
                 'CREATE INDEX IF NOT EXISTS entries_deleted '
                 'ON entries(deleted_at DESC, id DESC)',
