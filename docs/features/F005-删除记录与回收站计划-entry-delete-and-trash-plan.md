@@ -1539,6 +1539,7 @@ git commit -m "feat(F005):可读导出排除已删除条目,exclude deleted entr
 - Produces:
   - `EntryEditorController.canDelete` → `bool`
   - `EntryEditorController.currentEntryId` → `String?`
+  - `EntryEditorController.deleteError` → `String?`
   - `EntryEditorController.deleteCurrent()` → `Future<bool>`
 
 - [ ] **Step 1: 写失败的测试**
@@ -1636,14 +1637,27 @@ Expected: FAIL — `canDelete` / `currentEntryId` / `deleteCurrent` 不存在。
     if (_disposed) return false;
     final id = _id;
     if (id == null || !_persisted) return false;
-    // 有未保存的修改时先落盘，免得删除把刚写的内容一起丢掉。
-    if (!await flush()) return false;
+    // 先等在飞行的保存落地：否则迟到的保存会把下面的复位覆盖掉，
+    // 让界面显示「原记录仍保留」，而记录其实已经删掉了。
+    final pending = _saving;
+    if (pending != null) {
+      await pending;
+    }
+    // 正文非空时先落盘，免得删除把刚写的内容一起丢掉。
+    // 正文为空时跳过落盘：保存会因为「正文不能为空」失败，
+    // 但用户要的是把这条记录删掉，不该被针对保存的规则拦住。
+    if (_content.trim().isNotEmpty && !await flush()) return false;
     try {
       await repository.softDelete(id);
     } catch (error) {
       debugPrint('删除失败：$error');
-      _status = SaveStatus.error;
-      _error = '删除失败，这条记录仍在。';
+      // 防抖定时器还活着的话，1 秒后会触发 flush()，把「正文不能为空」
+      // 这条与删除无关的文案盖上来。这里先把它掐掉。
+      _timer?.cancel();
+      _timer = null;
+      // 删除错误单独走 [deleteError]：不占用保存的状态与错误字段，
+      // 否则界面会同时显示「保存失败」和「重试保存」。
+      _deleteError = '删除失败，这条记录仍在。';
       _notify();
       return false;
     }
@@ -1653,11 +1667,31 @@ Expected: FAIL — `canDelete` / `currentEntryId` / `deleteCurrent` 不存在。
     _createdAt = null;
     _persisted = false;
     _error = null;
+    _deleteError = null;
     _status = SaveStatus.empty;
     _notify();
     return true;
   }
 ```
+
+配套的三个公开成员：
+
+```dart
+  /// 当前是否正在编辑一条已保存的条目。新记录没有可删除的对象。
+  bool get canDelete => _persisted && _id != null;
+
+  /// 当前编辑的、且已落库的条目 ID；新记录（或保存失败、从未落库）时为 null。
+  String? get currentEntryId => _persisted ? _id : null;
+
+  /// 删除失败的原因。为 null 表示没有删除错误。
+  ///
+  /// 与保存错误分开：界面若把删除失败复用成保存失败，会同时显示
+  /// 「保存失败」和「重试保存」，与用户做的事自相矛盾。
+  String? get deleteError => _deleteError;
+```
+
+`_deleteError` 在 `updateContent()`、`newEntry()`、`edit()` 里都要清掉——用户换了内容或换了条目，上一次的删除失败提示就不该留着。
+
 
 - [ ] **Step 4: 运行测试确认通过**
 
@@ -2057,7 +2091,14 @@ Expected: FAIL — 「删除这条」按钮不存在。
     setState(() {
       _transitioning = false;
     });
-    if (!deleted) return;
+    if (!deleted) {
+      // 删除失败用控制器给的删除错误文案，不要复用保存错误：
+      // 界面上的「保存失败」和「重试保存」对删除来说都不对。
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_editor.deleteError ?? '删除失败，这条记录仍在')),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('已移到回收站'),
