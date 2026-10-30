@@ -111,6 +111,11 @@ class BackupCodec {
     if (deletedAt != null) {
       map['deletedAt'] = deletedAt.toUtc().toIso8601String();
     }
+    final mood = entry.mood;
+    // 只有已设心情的条目才写 mood，未设的不写键。
+    if (mood != null) {
+      map['mood'] = mood;
+    }
     return map;
   }
 
@@ -137,6 +142,7 @@ class BackupCodec {
       updatedAt: _parseDate(raw['updatedAt']),
       dayKey: dayKey,
       deletedAt: rawDeletedAt == null ? null : _parseDate(rawDeletedAt),
+      mood: raw['mood'] as String?,
     );
   }
 
