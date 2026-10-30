@@ -2,6 +2,7 @@ import 'package:sqflite_common/sqlite_api.dart';
 
 import '../../domain/entry.dart';
 import '../../domain/export/import_summary.dart';
+import '../../domain/export/merge_decision.dart';
 import '../../domain/local_entry_repository.dart';
 
 class SqliteEntryRepository implements LocalEntryRepository {
@@ -245,36 +246,41 @@ class SqliteEntryRepository implements LocalEntryRepository {
         }
         final rows = await txn.query(
           'entries',
-          columns: ['updated_at'],
           where: 'id = ?',
           whereArgs: [entry.id],
           limit: 1,
         );
-        if (rows.isEmpty) {
-          await txn.insert('entries', {
-            'id': entry.id,
-            'content': entry.content,
-            'created_at': entry.createdAt.millisecondsSinceEpoch,
-            'updated_at': entry.updatedAt.millisecondsSinceEpoch,
-            'day_key': entry.dayKey,
-          });
-          inserted++;
-          continue;
-        }
-        final localUpdatedAt = rows.first['updated_at'] as int;
-        if (entry.updatedAt.millisecondsSinceEpoch > localUpdatedAt) {
-          await txn.update(
-            'entries',
-            {
-              'content': entry.content,
-              'updated_at': entry.updatedAt.millisecondsSinceEpoch,
-            },
-            where: 'id = ?',
-            whereArgs: [entry.id],
-          );
-          updated++;
-        } else {
-          skipped++;
+        // 判定规则与预览侧共用 [decideMerge]：预告的数字和实际写入的数字
+        // 必须一致，包括「本地已删除的条目不会被备份复活」。
+        final local = rows.isEmpty ? null : _toEntry(rows.first);
+        final decision = decideMerge(local: local, incoming: entry);
+        switch (decision.action) {
+          case MergeAction.insert:
+            await txn.insert('entries', {
+              'id': decision.entry.id,
+              'content': decision.entry.content,
+              'created_at': decision.entry.createdAt.millisecondsSinceEpoch,
+              'updated_at': decision.entry.updatedAt.millisecondsSinceEpoch,
+              'day_key': decision.entry.dayKey,
+              // 插入时带上删除标记：备份里已删除的条目恢复后仍应留在回收站。
+              'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
+            });
+            inserted++;
+          case MergeAction.update:
+            await txn.update(
+              'entries',
+              {
+                'content': decision.entry.content,
+                'updated_at': decision.entry.updatedAt.millisecondsSinceEpoch,
+                // 删除状态跟备份走：备份带删除标记就把本地条目标记为已删除。
+                'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
+              },
+              where: 'id = ?',
+              whereArgs: [entry.id],
+            );
+            updated++;
+          case MergeAction.skip:
+            skipped++;
         }
       }
     });

@@ -51,4 +51,65 @@ void main() {
     expect(summary.updated, 0);
     expect(store['a']!.updatedAt, time);
   });
+
+  test('本地已删除的条目不会被备份复活', () {
+    final store = <String, Entry>{
+      'a': Entry(
+        id: 'a',
+        content: '内容 a',
+        createdAt: time,
+        updatedAt: time,
+        dayKey: '2026-10-28',
+        deletedAt: time,
+      ),
+    };
+    final summary = mergeEntries(store, [
+      Entry(
+        id: 'a',
+        content: '备份里的内容',
+        createdAt: time,
+        updatedAt: time.add(const Duration(minutes: 5)),
+        dayKey: '2026-10-28',
+      ),
+    ]);
+    expect(summary.skipped, 1);
+    expect(summary.updated, 0);
+    // 仍是本地那条已删除的条目，正文没有被备份覆盖。
+    expect(store['a']!.deletedAt, time);
+    expect(store['a']!.content, '内容 a');
+  });
+
+  test('备份带删除标记时把本地条目标记为已删除', () {
+    final store = <String, Entry>{'a': entry('a')};
+    final deletedAt = time.add(const Duration(minutes: 5));
+    final summary = mergeEntries(store, [
+      Entry(
+        id: 'a',
+        content: '备份里的内容',
+        createdAt: time,
+        updatedAt: deletedAt,
+        dayKey: '2026-10-28',
+        deletedAt: deletedAt,
+      ),
+    ]);
+    expect(summary.updated, 1);
+    expect(store['a']!.deletedAt, deletedAt);
+  });
+
+  test('备份里的已删除条目插入后仍带删除标记', () {
+    final store = <String, Entry>{};
+    final deletedAt = time.add(const Duration(minutes: 5));
+    final summary = mergeEntries(store, [
+      Entry(
+        id: 'a',
+        content: '备份里的内容',
+        createdAt: time,
+        updatedAt: deletedAt,
+        dayKey: '2026-10-28',
+        deletedAt: deletedAt,
+      ),
+    ]);
+    expect(summary.inserted, 1);
+    expect(store['a']!.deletedAt, deletedAt);
+  });
 }

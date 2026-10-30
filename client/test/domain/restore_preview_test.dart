@@ -87,4 +87,48 @@ void main() {
       expect(preview.skipped, 1);
     },
   );
+
+  test('本地已删除的条目不会被备份复活，计入跳过', () {
+    final deleted = Entry(
+      id: 'a',
+      content: '正文',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 30),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 10, 30),
+    );
+    final incoming = Entry(
+      id: 'a',
+      content: '正文',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 11, 1),
+      dayKey: '2026-10-28',
+    );
+    final preview = compareRestore([deleted], [incoming]);
+    expect(preview.inserted, 0);
+    expect(preview.updated, 0);
+    expect(preview.skipped, 1);
+  });
+
+  test('备份带删除标记时计入更新，与导入实现一致', () {
+    final local = Entry(
+      id: 'a',
+      content: '正文',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    final incoming = Entry(
+      id: 'a',
+      content: '正文',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 11, 1),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 11, 1),
+    );
+    final preview = compareRestore([local], [incoming]);
+    expect(preview.inserted, 0);
+    expect(preview.updated, 1);
+    expect(preview.skipped, 0);
+  });
 }

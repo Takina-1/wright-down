@@ -175,4 +175,57 @@ void main() {
       expect(stored.single.id, 'keep');
     },
   );
+
+  test('本地已删除的条目不会被备份复活', () async {
+    await repo.save(entry('a', '原本的正文'));
+    await repo.softDelete('a');
+
+    final incoming = Entry(
+      id: 'a',
+      content: '备份里的正文',
+      createdAt: DateTime.utc(2026, 10, 28, 3),
+      updatedAt: DateTime.utc(2026, 11, 1),
+      dayKey: '2026-10-28',
+    );
+    final summary = await repo.importAll([incoming]);
+
+    expect(summary.skipped, 1);
+    expect(summary.updated, 0);
+    expect(await repo.list(), isEmpty);
+    expect((await repo.listDeleted()).single.content, '原本的正文');
+  });
+
+  test('备份里带删除标记的条目会把本地条目标记为已删除', () async {
+    await repo.save(entry('a', '本机内容'));
+
+    final incoming = Entry(
+      id: 'a',
+      content: '备份里的正文',
+      createdAt: DateTime.utc(2026, 10, 28, 3),
+      updatedAt: DateTime.utc(2026, 11, 1),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 11, 1),
+    );
+    final summary = await repo.importAll([incoming]);
+
+    expect(summary.updated, 1);
+    expect(await repo.list(), isEmpty);
+    expect((await repo.listDeleted()).single.id, 'a');
+  });
+
+  test('备份里的已删除条目插入后仍在回收站', () async {
+    final incoming = Entry(
+      id: 'a',
+      content: '备份里的正文',
+      createdAt: DateTime.utc(2026, 10, 28, 3),
+      updatedAt: DateTime.utc(2026, 11, 1),
+      dayKey: '2026-10-28',
+      deletedAt: DateTime.utc(2026, 11, 1),
+    );
+    final summary = await repo.importAll([incoming]);
+
+    expect(summary.inserted, 1);
+    expect(await repo.list(), isEmpty);
+    expect((await repo.listDeleted()).single.id, 'a');
+  });
 }
