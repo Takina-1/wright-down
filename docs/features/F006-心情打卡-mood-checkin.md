@@ -114,7 +114,9 @@ class Entry {
 
 SQLite `entries` 表新增 `mood TEXT`（可空），schema **v2 → v3**。迁移**幂等**（参照 F005 的 `deleted_at` 做法）：先 `PRAGMA table_info` 查列，没有 `mood` 才 `ALTER TABLE ADD COLUMN mood TEXT`。新建库（`onCreate`）直接建带该列的表。
 
-`LocalEntryRepository` 接口**不变**——mood 是 `Entry` 字段，`save`／`list`／`exportAll`／`importAll` 自动携带。`save()` 写入 mood（非空才写，与 `deleted_at` 同口径），`_toEntry` 读回 mood。
+`LocalEntryRepository` 接口**不变**——mood 是 `Entry` 字段，`save`／`list`／`exportAll`／`importAll` 自动携带。`save()` 写入 mood 采用 **always-write** 口径（null 即清除，与 `content`／`updated_at` 同口径），`_toEntry` 读回 mood。
+
+> mood 的清除语义与 `deleted_at` 不同：`deleted_at` 是「非空才写」（防编辑正文时意外复活，清除靠伴生的 `restore()`）；mood 是用户可显式清除的普通可选字段，编辑器总是携带当前心情，所以 `save()` 总是写 mood——传入 null 即清空。两者不可混同。
 
 ### 5.3 UI
 
