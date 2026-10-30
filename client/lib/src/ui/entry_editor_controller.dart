@@ -49,6 +49,8 @@ class EntryEditorController extends ChangeNotifier {
     if (_disposed || value == _content) return;
     _content = value;
     _error = null;
+    // 开始改字就说明用户已经换了个心思，上一次的删除失败提示不该留着。
+    _deleteError = null;
     _timer?.cancel();
     _status = hasPendingChanges
         ? SaveStatus.editing
@@ -122,6 +124,7 @@ class EntryEditorController extends ChangeNotifier {
     _createdAt = null;
     _persisted = false;
     _error = null;
+    _deleteError = null;
     _status = SaveStatus.empty;
     _notify();
     return true;
@@ -135,6 +138,7 @@ class EntryEditorController extends ChangeNotifier {
     _dayKey = entry.dayKey;
     _persisted = true;
     _error = null;
+    _deleteError = null;
     _status = SaveStatus.saved;
     _notify();
     return true;
