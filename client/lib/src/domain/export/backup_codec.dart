@@ -151,8 +151,12 @@ class BackupCodec {
 
   /// 时间串必须带 `Z` 或显式时区偏移，否则同一份文件在不同设备会解出不同的绝对时刻。
   ///
-  /// 判定只认解析结果：带 `Z` 或偏移（`+08:00`、`+0800`、`+08`）的时间串解出来是 UTC，
-  /// 不带时区的时间串解出来是本地时间，`isUtc` 为 false，正好能把两者分开。
+  /// 判定只看解析结果的 `isUtc`：[DateTime.parse] 只要解析到时区部分
+  /// （结尾的 `Z`，或偏移 `+08:00` / `+0800` / `+08`），返回的 [DateTime]
+  /// 就一律是 `isUtc` 为 true 的 UTC 时刻（带非零偏移时按该偏移折算成 UTC）；
+  /// 不带时区的时间串则按设备本地时区解析，`isUtc` 为 false。
+  /// 因此 `!parsed.isUtc` 恰好就是「没带时区」的判据：带时区的一律接受，
+  /// 不带时区的一律拒绝。
   DateTime _parseDate(Object? raw) {
     if (raw is! String) {
       throw const BackupFormatException(damagedReason);

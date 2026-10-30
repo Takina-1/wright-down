@@ -194,6 +194,25 @@ class EntryEditorController extends ChangeNotifier {
     return true;
   }
 
+  /// 条目在别处被删除时告知控制器。
+  ///
+  /// 正在编辑的就是它时，把编辑器复位为空白的新记录——继续编辑一条已经
+  /// 在回收站里的记录，界面会显示「已保存」而用户根本看不到它。
+  /// 返回 true 表示确实复位了。
+  bool markDeleted(String id) {
+    if (_disposed || _id != id) return false;
+    _timer?.cancel();
+    _content = _savedContent = '';
+    _id = _dayKey = null;
+    _createdAt = null;
+    _persisted = false;
+    _error = null;
+    _deleteError = null;
+    _status = SaveStatus.empty;
+    _notify();
+    return true;
+  }
+
   @override
   void dispose() {
     _disposed = true;

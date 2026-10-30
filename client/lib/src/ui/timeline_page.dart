@@ -11,10 +11,16 @@ class TimelinePage extends StatefulWidget {
     required this.repository,
     required this.onEdit,
     required this.onStart,
+    this.onDelete,
   });
   final LocalEntryRepository repository;
   final ValueChanged<Entry> onEdit;
   final VoidCallback onStart;
+
+  /// 删除成功后回调，让调用方知道哪条记录进了回收站。
+  ///
+  /// 不传就是 null，保持现有调用方兼容。
+  final ValueChanged<Entry>? onDelete;
   @override
   State<TimelinePage> createState() => _TimelinePageState();
 }
@@ -157,6 +163,9 @@ class _TimelinePageState extends State<TimelinePage> {
     setState(() {
       _entries.removeWhere((item) => item.id == entry.id);
     });
+    // 通知调用方这条记录进了回收站：调用方可能正编辑着它，得把编辑器复位，
+    // 否则界面会继续显示「已保存」，而记录在回顾页里已经看不见了。
+    widget.onDelete?.call(entry);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('已移到回收站'),

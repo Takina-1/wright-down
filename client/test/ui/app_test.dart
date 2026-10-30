@@ -341,6 +341,43 @@ void main() {
     expect(repo.entries.values.single.deletedAt, isNotNull);
   });
 
+  testWidgets('回顾页删除了正在编辑的条目时记录页复位并提示', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    // 先在记录页写一条并保存：编辑器此时持有这条记录。
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.text('已保存'), findsOneWidget);
+
+    // 切到回顾页，长按同一条记录并删除。
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('timeline-action-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('timeline-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    // 切回记录页：编辑器不该再显示「已保存」——那条记录已经在回收站里，
+    // 回顾页再也看不到它，界面继续说「已保存」就是在说谎。
+    await tester.tap(find.byKey(const Key('tab-write')));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('entry-content')),
+    );
+    expect(field.controller!.text, isEmpty);
+    expect(find.text('已保存'), findsNothing);
+    // 提示用户这条记录被移走了。
+    expect(find.text('这条记录已移入回收站'), findsOneWidget);
+    // 仓库里那条确实被软删除。
+    expect(repo.entries.values.single.deletedAt, isNotNull);
+  });
+
   testWidgets('删除前保存失败时优先提示保存失败原因', (tester) async {
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));

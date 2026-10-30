@@ -22,7 +22,10 @@ class _TrashPageState extends State<TrashPage> {
   bool _failed = false;
 
   /// 读回来的条数打到了 [_pageSize]，说明库里可能还有更早的已删除条目，
-  /// 界面得提示用户「只显示最近 N 条」，否则「清空回收站」会删掉看不见的条目。
+  /// 界面得提示用户「这里只显示最近 N 条」，否则「清空回收站」会删掉看不见的条目。
+  ///
+  /// 恰好 [_pageSize] 条时无法区分「正好这么多」和「还有更多」，所以提示
+  /// 只能说「可能还有更多」，不能说「更早的记录不会出现在这里」。
   bool _mayHaveMore = false;
 
   @override
@@ -92,7 +95,13 @@ class _TrashPageState extends State<TrashPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('彻底删除这条记录？'),
-        content: const Text('彻底删除后不能再恢复，之后导出的备份也不再包含这条记录。'),
+        // 彻底删除是物理删除、不留墓碑：导出一份删除之前的旧备份再导入，
+        // 这条记录会因为「本地查无此条目」而重新出现。这个限定条件必须
+        // 在不可逆操作前告诉用户，否则文案会让人以为它永远没了。
+        content: const Text(
+          '彻底删除后不能再恢复，之后导出的备份也不再包含它。'
+          '但如果导入的是彻底删除之前的旧备份，这条记录仍会重新出现。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -133,7 +142,12 @@ class _TrashPageState extends State<TrashPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('清空回收站？'),
-        content: const Text('回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'),
+        // 同单条彻底删除：物理删除不留墓碑，导入更早的旧备份会让这些
+        // 记录重新出现在时间轴上。
+        content: const Text(
+          '回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'
+          '但导入彻底删除之前的旧备份时，这些记录仍会重新出现。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -276,7 +290,7 @@ class _TrashOverflowNotice extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 8, bottom: 8),
     child: Text(
-      '仅显示最近 $count 条，更早的记录不会出现在这里。',
+      '这里只显示最近 $count 条，可能还有更早的记录没有显示在这里。',
       textAlign: TextAlign.center,
       style: Theme.of(context).textTheme.bodySmall,
     ),

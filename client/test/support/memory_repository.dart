@@ -40,6 +40,12 @@ class MemoryRepository implements LocalEntryRepository {
 
   @override
   Future<void> save(Entry entry) async {
+    // 与生产实现口径一致：ID 为空或正文为空的条目一律拒绝，且校验发生在
+    // 一切副作用（计数、等待、写入）之前。替身不校验的话，代码把空正文
+    // 交给 save() 时测试会全绿，真机却抛异常。
+    if (entry.id.isEmpty || entry.content.trim().isEmpty) {
+      throw ArgumentError('An entry needs an id and non-empty content');
+    }
     saves++;
     final waitFor = gate;
     if (waitFor != null) await waitFor.future;

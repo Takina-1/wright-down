@@ -172,6 +172,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  /// 回顾页删除了条目：如果正在编辑它，编辑器复位并提示用户。
+  void _entryDeleted(Entry entry) {
+    if (!_editor.markDeleted(entry.id)) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('这条记录已移入回收站')),
+    );
+  }
+
   /// 撤销删除：把条目从回收站恢复回来。
   ///
   /// 仓储由调用方传入而不是从 `widget` 取：撤销入口挂在 app 级的
@@ -268,6 +276,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             repository: widget.repository,
             onEdit: _edit,
             onStart: () => _selectTab(0),
+            onDelete: _entryDeleted,
           ),
           _ => LocalDataPage(
             repository: widget.repository,

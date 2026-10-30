@@ -379,6 +379,51 @@ void main() {
     expect(find.text('第一条记录'), findsNothing);
   });
 
+  testWidgets('删除成功后回调 onDelete 告诉调用方是哪一条', (tester) async {
+    final repo = await seed();
+    Entry? deleted;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelinePage(
+            repository: repo,
+            onEdit: (_) {},
+            onStart: () {},
+            onDelete: (entry) => deleted = entry,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await deleteEntry(tester, '第一条记录');
+
+    expect(deleted?.id, 'a');
+  });
+
+  testWidgets('删除失败时不回调 onDelete', (tester) async {
+    final repo = await seed();
+    repo.failDelete = true;
+    var called = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TimelinePage(
+            repository: repo,
+            onEdit: (_) {},
+            onStart: () {},
+            onDelete: (_) => called = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await deleteEntry(tester, '第一条记录');
+
+    expect(called, isFalse);
+  });
+
   testWidgets('页面已卸载时撤销仍能恢复数据库里的条目', (tester) async {
     final repo = await seed();
 

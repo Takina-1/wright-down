@@ -96,7 +96,10 @@ void main() {
     // 确认对话框确实弹出来了。
     expect(find.text('彻底删除这条记录？'), findsOneWidget);
     expect(
-      find.text('彻底删除后不能再恢复，之后导出的备份也不再包含这条记录。'),
+      find.text(
+        '彻底删除后不能再恢复，之后导出的备份也不再包含它。'
+        '但如果导入的是彻底删除之前的旧备份，这条记录仍会重新出现。',
+      ),
       findsOneWidget,
     );
     expect(find.byKey(const Key('trash-purge-confirm')), findsOneWidget);
@@ -132,7 +135,10 @@ void main() {
 
     expect(find.text('清空回收站？'), findsOneWidget);
     expect(
-      find.text('回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'),
+      find.text(
+        '回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'
+        '但导入彻底删除之前的旧备份时，这些记录仍会重新出现。',
+      ),
       findsOneWidget,
     );
     expect(find.byKey(const Key('trash-purge-all-confirm')), findsOneWidget);
@@ -278,14 +284,14 @@ void main() {
 
     // 提示在列表最底部，30 条卡片要滚到底才看得见。
     await tester.scrollUntilVisible(
-      find.text('仅显示最近 30 条，更早的记录不会出现在这里。'),
+      find.text('这里只显示最近 30 条，可能还有更早的记录没有显示在这里。'),
       500,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
 
     expect(
-      find.text('仅显示最近 30 条，更早的记录不会出现在这里。'),
+      find.text('这里只显示最近 30 条，可能还有更早的记录没有显示在这里。'),
       findsOneWidget,
     );
   });
@@ -301,7 +307,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('仅显示最近 30 条，更早的记录不会出现在这里。'),
+      find.text('这里只显示最近 30 条，可能还有更早的记录没有显示在这里。'),
       findsNothing,
     );
   });

@@ -347,6 +347,61 @@ void main() {
     expect(controller.currentEntryId, isNull);
   });
 
+  test('条目在别处被删除时正在编辑它的编辑器复位', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+    controller.updateContent('改了但没保存');
+
+    // 别的页面把这条删了。
+    expect(controller.markDeleted('saved-1'), isTrue);
+
+    // 编辑器复位为空白的新记录：继续编辑一条已在回收站里的记录，
+    // 界面会显示「已保存」而用户根本看不到它。
+    expect(controller.content, isEmpty);
+    expect(controller.canDelete, isFalse);
+    expect(controller.currentEntryId, isNull);
+    expect(controller.status, SaveStatus.empty);
+    expect(controller.hasPendingChanges, isFalse);
+    expect(controller.error, isNull);
+    expect(controller.deleteError, isNull);
+  });
+
+  test('别处删除的不是当前条目时编辑器不受影响', () async {
+    final controller = EntryEditorController(
+      repository: repo,
+      idGenerator: () => 'unused',
+      now: () => DateTime.utc(2026, 10, 28),
+    );
+    addTearDown(controller.dispose);
+    final entry = Entry(
+      id: 'saved-1',
+      content: '原内容',
+      createdAt: DateTime.utc(2026, 10, 28),
+      updatedAt: DateTime.utc(2026, 10, 28),
+      dayKey: '2026-10-28',
+    );
+    repo.entries[entry.id] = entry;
+    await controller.edit(entry);
+
+    expect(controller.markDeleted('other-id'), isFalse);
+    expect(controller.content, '原内容');
+    expect(controller.currentEntryId, 'saved-1');
+    expect(controller.status, SaveStatus.saved);
+  });
+
   test('删除后再新建的记录重新计算日期，不继承被删条目', () async {
     final controller = EntryEditorController(
       repository: repo,

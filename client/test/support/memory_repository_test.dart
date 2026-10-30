@@ -373,6 +373,29 @@ void main() {
       await expectLater(repo.purge(''), throwsArgumentError);
     });
 
+    test('save 拒绝空正文且不写入条目', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+
+      // 与生产实现一致：正文为空白也算空。
+      await expectLater(
+        repo.save(_entry(id: 'a', content: '   ')),
+        throwsArgumentError,
+      );
+
+      expect(repo.entries.containsKey('a'), isFalse);
+      expect(repo.saves, 0);
+    });
+
+    test('save 拒绝空 id 且不写入条目', () async {
+      final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
+
+      await expectLater(repo.save(_entry(id: '')), throwsArgumentError);
+
+      expect(repo.entries.containsKey(''), isFalse);
+      expect(repo.entries, isEmpty);
+      expect(repo.saves, 0);
+    });
+
     test('restore 对不存在与未删除的条目抛同一条消息', () async {
       final repo = MemoryRepository(now: () => DateTime.utc(2026, 10, 30, 12));
       await repo.save(_entry(id: 'a'));
