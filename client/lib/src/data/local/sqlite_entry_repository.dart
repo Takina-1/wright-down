@@ -282,6 +282,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               'day_key': decision.entry.dayKey,
               // 插入时带上删除标记：备份里已删除的条目恢复后仍应留在回收站。
               'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
+              // 插入时带上心情：与 update 分支同口径，null 即不带心情。
+              'mood': decision.entry.mood,
             });
             inserted++;
           case MergeAction.update:
@@ -295,6 +297,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 // 保证：本地已删除而备份未删除时根本走不到这个分支，
                 // 所以这里写 null 只是保持列完整，不会取消删除标记。
                 'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
+                // mood 跟 updatedAt 走：备份带 mood 用备份的，备份不带 mood 清空本地 mood。
+                'mood': decision.entry.mood,
               },
               where: 'id = ?',
               whereArgs: [entry.id],

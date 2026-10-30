@@ -43,6 +43,7 @@ MergeDecision decideMerge({Entry? local, required Entry incoming}) {
         updatedAt: incoming.updatedAt,
         dayKey: local.dayKey,
         deletedAt: incoming.deletedAt,
+        mood: incoming.mood, // mood 跟 updatedAt 走
       ),
     );
   }
