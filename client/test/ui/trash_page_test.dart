@@ -96,7 +96,7 @@ void main() {
     // 确认对话框确实弹出来了。
     expect(find.text('彻底删除这条记录？'), findsOneWidget);
     expect(
-      find.text('彻底删除后不能再恢复，也无法通过备份找回。'),
+      find.text('彻底删除后不能再恢复，之后导出的备份也不再包含这条记录。'),
       findsOneWidget,
     );
     expect(find.byKey(const Key('trash-purge-confirm')), findsOneWidget);
@@ -132,7 +132,7 @@ void main() {
 
     expect(find.text('清空回收站？'), findsOneWidget);
     expect(
-      find.text('回收站里的所有记录都会被彻底删除，无法恢复。'),
+      find.text('回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'),
       findsOneWidget,
     );
     expect(find.byKey(const Key('trash-purge-all-confirm')), findsOneWidget);

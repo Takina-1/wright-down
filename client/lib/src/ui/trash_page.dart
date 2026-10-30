@@ -92,7 +92,7 @@ class _TrashPageState extends State<TrashPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('彻底删除这条记录？'),
-        content: const Text('彻底删除后不能再恢复，也无法通过备份找回。'),
+        content: const Text('彻底删除后不能再恢复，之后导出的备份也不再包含这条记录。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -133,7 +133,7 @@ class _TrashPageState extends State<TrashPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('清空回收站？'),
-        content: const Text('回收站里的所有记录都会被彻底删除，无法恢复。'),
+        content: const Text('回收站里的所有记录都会被彻底删除，之后导出的备份不再包含它们。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
