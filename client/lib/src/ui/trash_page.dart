@@ -14,9 +14,16 @@ class TrashPage extends StatefulWidget {
 }
 
 class _TrashPageState extends State<TrashPage> {
+  /// 一页的条数，与 [LocalEntryRepository.listDeleted] 的默认 limit 一致。
+  static const _pageSize = 30;
+
   final _entries = <Entry>[];
   bool _loading = true;
   bool _failed = false;
+
+  /// 读回来的条数打到了 [_pageSize]，说明库里可能还有更早的已删除条目，
+  /// 界面得提示用户「只显示最近 N 条」，否则「清空回收站」会删掉看不见的条目。
+  bool _mayHaveMore = false;
 
   @override
   void initState() {
@@ -27,16 +34,18 @@ class _TrashPageState extends State<TrashPage> {
   /// 读取回收站内容。失败时给出「读取失败」并留一个重新加载的入口。
   Future<void> _load() async {
     try {
-      final entries = await widget.repository.listDeleted();
+      final entries = await widget.repository.listDeleted(limit: _pageSize);
       if (!mounted) return;
       setState(() {
         _entries
           ..clear()
           ..addAll(entries);
+        _mayHaveMore = entries.length >= _pageSize;
         _loading = false;
         _failed = false;
       });
-    } catch (_) {
+    } catch (error) {
+      debugPrint('读取回收站失败：$error');
       if (!mounted) return;
       setState(() {
         _failed = true;
@@ -60,7 +69,8 @@ class _TrashPageState extends State<TrashPage> {
     final repository = widget.repository;
     try {
       await repository.restore(entry.id);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('恢复失败：$error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('恢复失败，请重试')),
@@ -100,7 +110,8 @@ class _TrashPageState extends State<TrashPage> {
     final repository = widget.repository;
     try {
       await repository.purge(entry.id);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('彻底删除失败：$error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('彻底删除失败，请重试')),
@@ -147,7 +158,8 @@ class _TrashPageState extends State<TrashPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已清空 $count 条')),
       );
-    } catch (_) {
+    } catch (error) {
+      debugPrint('清空失败：$error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('清空失败，请重试')),
@@ -156,9 +168,10 @@ class _TrashPageState extends State<TrashPage> {
   }
 
   /// 删除时间戳：年-月-日 时:分，月、日、时、分都补零到两位。
+  /// 没有删除时间时给出占位串，避免界面上出现悬空的「删除于 」。
   String _formatDeletedAt(Entry entry) {
     final deletedAt = entry.deletedAt?.toLocal();
-    if (deletedAt == null) return '';
+    if (deletedAt == null) return '未知时间';
     final month = deletedAt.month.toString().padLeft(2, '0');
     final day = deletedAt.day.toString().padLeft(2, '0');
     final hour = deletedAt.hour.toString().padLeft(2, '0');
@@ -203,8 +216,11 @@ class _TrashPageState extends State<TrashPage> {
           )
         : ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: _entries.length,
+            itemCount: _entries.length + (_mayHaveMore ? 1 : 0),
             itemBuilder: (context, index) {
+              if (_mayHaveMore && index == _entries.length) {
+                return const _TrashOverflowNotice(count: _pageSize);
+              }
               final entry = _entries[index];
               return Card(
                 elevation: 0,
@@ -246,5 +262,23 @@ class _TrashPageState extends State<TrashPage> {
               );
             },
           ),
+  );
+}
+
+/// 列表底部的提示：当一页显示不下所有已删除条目时，告诉用户还有更早的记录。
+class _TrashOverflowNotice extends StatelessWidget {
+  const _TrashOverflowNotice({required this.count});
+
+  /// 这一页最多显示多少条。
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 8, bottom: 8),
+    child: Text(
+      '仅显示最近 $count 条，更早的记录不会出现在这里。',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodySmall,
+    ),
   );
 }
