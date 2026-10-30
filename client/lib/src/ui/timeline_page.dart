@@ -139,8 +139,12 @@ class _TimelinePageState extends State<TimelinePage> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    // SnackBar 挂在 app 级的 ScaffoldMessenger 上，可能比这个页面活得久
+    // （切 Tab 会重建 TimelinePage）。把仓储取到局部变量，撤销回调就不依赖
+    // 可能已卸载的 State，也不会在 State defunct 后再碰 widget。
+    final repository = widget.repository;
     try {
-      await widget.repository.softDelete(entry.id);
+      await repository.softDelete(entry.id);
     } catch (error) {
       debugPrint('删除失败：$error');
       if (!mounted) return;
@@ -158,18 +162,32 @@ class _TimelinePageState extends State<TimelinePage> {
         content: const Text('已移到回收站'),
         action: SnackBarAction(
           label: '撤销',
-          onPressed: () => unawaited(_restoreEntry(entry)),
+          onPressed: () => unawaited(_restoreEntry(entry, repository)),
         ),
       ),
     );
   }
 
   /// 撤销删除：把条目放回列表。
-  Future<void> _restoreEntry(Entry entry) async {
+  ///
+  /// 仓储由调用方传入而不是从 `widget` 取：撤销入口挂在 app 级的
+  /// ScaffoldMessenger 上，页面此时可能已经卸载，State defunct 后再碰
+  /// `widget` 不可靠。页面已卸载时只恢复数据库，界面刷新交给用户重新
+  /// 进入回顾页，数据不会丢。
+  Future<void> _restoreEntry(
+    Entry entry,
+    LocalEntryRepository repository,
+  ) async {
     try {
-      await widget.repository.restore(entry.id);
+      await repository.restore(entry.id);
     } catch (error) {
       debugPrint('恢复失败：$error');
+      // 恢复失败必须让用户看见：只 debugPrint 的话，用户点了撤销却看不到
+      // 条目回来，以为撤销没生效。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('恢复失败，请到回收站重试')),
+      );
       return;
     }
     if (!mounted) return;
