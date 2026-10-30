@@ -235,7 +235,7 @@ client/lib/src/ui/timeline_page.dart               时间轴卡片显示心情 e
   - 不做心情统计（连续心情天数、热力图、情绪分析）、每日心情打卡、按心情筛选。
   - 心情表情固定 5 种，不支持自定义。
   - `EntryEditorController.setMood` 注释「心情仍要落库」与实际不符（mood 随正文落库，空正文不落库）——待后续修正注释或补测试固化口径。
-- 测试报告与交付物：[F006 测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md)（待创建）。
+- 测试报告与交付物：[F006 测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md)
 
 | 日期 | 需求或方案变化 | 原因与决策来源 | 影响的验收标准 |
 |---|---|---|---|
