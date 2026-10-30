@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/entry.dart';
 import '../domain/local_entry_repository.dart';
+import '../domain/mood.dart';
 
 class TimelinePage extends StatefulWidget {
   const TimelinePage({
@@ -342,6 +343,7 @@ class _TimelinePageState extends State<TimelinePage> {
                   final showMonth =
                       index == 0 || _monthOf(_entries[index - 1]) != month;
                   final time = entry.createdAt.toLocal();
+                  final emoji = emojiOf(entry.mood);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -357,6 +359,7 @@ class _TimelinePageState extends State<TimelinePage> {
                         elevation: 0,
                         child: ListTile(
                           contentPadding: const EdgeInsets.all(16),
+                          leading: emoji.isEmpty ? null : Text(emoji),
                           title: Text(
                             entry.content,
                             maxLines: 4,
