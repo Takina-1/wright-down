@@ -5,6 +5,9 @@
 **/.pub-cache/
 node_modules/
 
+# 本地验证记录（截图、数据库副本等，不入库）
+.verify/
+
 # 构建产物
 **/build/
 **/out/
