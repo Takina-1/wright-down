@@ -242,4 +242,64 @@ void main() {
       updated: DateTime.utc(2026, 10, 30, 3, 0)));
     expect((await repo.list()).single.mood, 'sad');
   });
+
+  test('AC-09: 已含 mood 列的库（user_version=2）再次升级不报 duplicate column', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+
+    // 模拟用户用旧版打开过 v3 结构的库：表结构已含 mood 列，
+    // 但 user_version 被旧版回退到 2。再用 version 3 的 repository
+    // 打开会触发 onUpgrade(2→3)，迁移代码先查 PRAGMA table_info
+    // 发现 mood 列已存在，跳过 ALTER——不报 duplicate column。
+    final legacy = await factory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 2,
+        onCreate: (db, version) async {
+          // 直接建 v3 结构（含 mood 列），但 user_version 是 2
+          await db.execute('''CREATE TABLE entries (
+            id TEXT PRIMARY KEY NOT NULL,
+            content TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            day_key TEXT NOT NULL,
+            deleted_at INTEGER,
+            mood TEXT
+          )''');
+          await db.execute(
+            'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
+          );
+          await db.execute('CREATE INDEX entries_day ON entries(day_key)');
+          await db.execute(
+            'CREATE INDEX entries_deleted ON entries(deleted_at DESC, id DESC)',
+          );
+        },
+      ),
+    );
+    await legacy.insert('entries', {
+      'id': 're-upgrade-1',
+      'content': '旧版打开过的记录',
+      'created_at': DateTime.utc(2026, 10, 28).millisecondsSinceEpoch,
+      'updated_at': DateTime.utc(2026, 10, 28).millisecondsSinceEpoch,
+      'day_key': '2026-10-28',
+      'mood': 'happy',
+    });
+    await legacy.close();
+
+    // 用 version 3 的 repository 打开同一路径，触发 onUpgrade(2→3)。
+    // mood 列已存在，迁移代码应跳过 ALTER，不抛 duplicate column。
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    // 打开不抛异常即说明迁移幂等；数据完好且 mood 读回正确。
+    final entries = await repo.exportAll();
+    expect(entries, hasLength(1));
+    expect(entries.single.content, '旧版打开过的记录');
+    expect(entries.single.mood, 'happy');
+  });
 }

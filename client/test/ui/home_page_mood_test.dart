@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/ui/home_page.dart';
 
 import '../support/memory_repository.dart';
@@ -57,5 +58,39 @@ void main() {
     await tester.tap(find.text('清除'));
     await tester.pumpAndSettle();
     expect(find.text('😊'), findsWidgets);
+  });
+
+  testWidgets('AC-06: 编辑已设心情的条目，弹层显示当前心情为已选', (tester) async {
+    final repo = MemoryRepository();
+    // Pre-populate with an entry that has mood='happy'
+    repo.entries['e1'] = Entry(
+      id: 'e1',
+      content: '今天很开心',
+      createdAt: DateTime(2026, 10, 30, 2, 0),
+      updatedAt: DateTime(2026, 10, 30, 2, 0),
+      dayKey: '2026-10-30',
+      mood: 'happy',
+    );
+    await _pumpHome(tester, repo);
+    // Switch to review tab
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    // Click on the entry in the timeline to trigger edit
+    await tester.tap(find.text('今天很开心'));
+    await tester.pumpAndSettle();
+    // Now we should be back on the composer tab with the entry loaded
+    // Open the mood sheet
+    await tester.tap(find.byKey(const Key('mood-entry')));
+    await tester.pumpAndSettle();
+    // AC-06: The '开心' ListTile should have a check icon (selected state)
+    final happyTile = find.ancestor(
+      of: find.text('开心'),
+      matching: find.byType(ListTile),
+    );
+    expect(
+      find.descendant(of: happyTile, matching: find.byIcon(Icons.check)),
+      findsOneWidget,
+      reason: 'AC-06: 已设心情的条目弹层应显示当前心情为已选',
+    );
   });
 }

@@ -70,8 +70,7 @@ class EntryEditorController extends ChangeNotifier {
     if (_disposed || mood == _mood) return;
     _mood = mood;
     _timer?.cancel();
-    // mood 变化要触发保存：若正文为空则保存会失败，但心情仍要落库，
-    // 所以 mood 变化一律调度 flush（flush 内部对空正文有保护）。
+    // mood 变化触发 flush；空正文时保存跳过，mood 随正文一起落库。
     _timer = Timer(const Duration(seconds: 1), () => unawaited(flush()));
     _notify();
   }

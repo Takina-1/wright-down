@@ -10,8 +10,6 @@ enum Mood {
   neutral,
   plain,
   sad;
-
-  String get storage => name;
 }
 
 /// 全部心情，弹层按此顺序展示。
