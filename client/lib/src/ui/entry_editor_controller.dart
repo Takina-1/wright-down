@@ -29,8 +29,10 @@ class EntryEditorController extends ChangeNotifier {
   SaveStatus _status = SaveStatus.empty;
   String? _error;
   String? _deleteError;
+  String? _mood;
 
   String get content => _content;
+  String? get mood => _mood;
   SaveStatus get status => _status;
   String? get error => _error;
 
@@ -60,6 +62,18 @@ class EntryEditorController extends ChangeNotifier {
     }
     _notify();
   }
+
+  void setMood(String? mood) {
+    if (_disposed || mood == _mood) return;
+    _mood = mood;
+    _timer?.cancel();
+    // mood 变化要触发保存：若正文为空则保存会失败，但心情仍要落库，
+    // 所以 mood 变化一律调度 flush（flush 内部对空正文有保护）。
+    _timer = Timer(const Duration(seconds: 1), () => unawaited(flush()));
+    _notify();
+  }
+
+  void clearMood() => setMood(null);
 
   Future<bool> flush() {
     _timer?.cancel();
@@ -91,6 +105,7 @@ class EntryEditorController extends ChangeNotifier {
         createdAt: _createdAt!,
         updatedAt: timestamp,
         dayKey: _dayKey!,
+        mood: _mood,
       );
       _status = SaveStatus.saving;
       _error = null;
@@ -122,6 +137,7 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _id = _dayKey = null;
     _createdAt = null;
+    _mood = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -136,6 +152,7 @@ class EntryEditorController extends ChangeNotifier {
     _id = entry.id;
     _createdAt = entry.createdAt;
     _dayKey = entry.dayKey;
+    _mood = entry.mood;
     _persisted = true;
     _error = null;
     _deleteError = null;
@@ -186,6 +203,7 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _id = _dayKey = null;
     _createdAt = null;
+    _mood = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -205,6 +223,7 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _id = _dayKey = null;
     _createdAt = null;
+    _mood = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
