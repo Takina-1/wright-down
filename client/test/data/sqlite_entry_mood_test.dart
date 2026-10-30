@@ -186,7 +186,7 @@ void main() {
     expect((await repo.list()).single.mood, isNull);
   });
 
-  test('编辑不带 mood 的 Entry 不会覆盖已有 mood', () async {
+  test('AC-07: save 同 id 带 mood=null 能清除已有心情', () async {
     final factory = databaseFactoryFfi;
     final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
     final path = '${temp.path}/journal.db';
@@ -198,14 +198,32 @@ void main() {
     });
 
     await repo.save(_entry('m3', 'a', mood: 'happy'));
-    // 编辑器保存正文时构造的 Entry 不带 mood
-    await repo.save(Entry(
-      id: 'm3', content: 'a 改',
-      createdAt: DateTime.utc(2026, 10, 30, 2, 0),
-      updatedAt: DateTime.utc(2026, 10, 30, 3, 0),
-      dayKey: '2026-10-30',
-    ));
+    // always-write 口径：编辑器总是携带当前 mood，mood=null 即清除库中
+    // 已有的心情（AC-07）。不再沿用「非空才写」的旧口径。
+    await repo.save(_entry('m3', 'a 改', mood: null,
+      updated: DateTime.utc(2026, 10, 30, 3, 0)));
+    expect((await repo.list()).single.mood, isNull);
+  });
+
+  test('设置 mood 后清除，时间轴 list 与 exportAll 读回 null', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    await repo.save(_entry('m5', '今天很开心', mood: 'happy'));
     expect((await repo.list()).single.mood, 'happy');
+    // 清除心情：always-write 口径下 save mood=null 即写 NULL，时间轴
+    // list 与 exportAll 都应读回 null。
+    await repo.save(_entry('m5', '今天很开心', mood: null,
+      updated: DateTime.utc(2026, 10, 30, 3, 0)));
+    expect((await repo.list()).single.mood, isNull);
+    expect((await repo.exportAll()).single.mood, isNull);
   });
 
   test('编辑带新 mood 的 Entry 会更新 mood', () async {

@@ -55,12 +55,11 @@ class MemoryRepository implements LocalEntryRepository {
       entries[entry.id] = entry;
       return;
     }
-    // 与生产实现口径一致：更新分支只写正文与修改时间，创建时间、日期键、
-    // 删除标记、mood 都沿用库里已有的值——mood 沿用「传入非空则用传入的，
-    // 否则保留已有的」，与生产实现「非空才写」一致，避免测试替身与生产
-    // 实现漂移。
-    // 调用方（编辑器）构造的 Entry 不带 deletedAt，若整体替换，
-    // 已软删除的条目会被复活回到时间轴。
+    // 与生产实现口径一致：更新分支写正文、修改时间与 mood，创建时间、日期键、
+    // 删除标记沿用库里已有的值。mood 采用 always-write 口径：总是写入传入的
+    // mood，传入 null 即清除已有心情（AC-07），与生产实现一致，避免测试替身
+    // 与生产实现漂移。deletedAt 仍沿用「非空才写」：调用方（编辑器）构造的
+    // Entry 不带 deletedAt，若整体写 null，已软删除的条目会被复活回到时间轴。
     entries[entry.id] = Entry(
       id: existing.id,
       content: entry.content,
@@ -68,7 +67,7 @@ class MemoryRepository implements LocalEntryRepository {
       updatedAt: entry.updatedAt,
       dayKey: existing.dayKey,
       deletedAt: entry.deletedAt ?? existing.deletedAt,
-      mood: entry.mood ?? existing.mood,
+      mood: entry.mood,
     );
   }
 

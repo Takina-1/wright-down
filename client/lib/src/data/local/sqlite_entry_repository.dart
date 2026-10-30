@@ -91,9 +91,12 @@ class SqliteEntryRepository implements LocalEntryRepository {
           // 调用方构造的 Entry 不带 deletedAt，库里的删除标记必须留着，
           // 否则条目会被无声复活回到时间轴。
           if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
-          // mood 与 deleted_at 同口径：只在显式带上时才写，编辑正文不带
-          // mood 的 Entry 不会覆盖库里已有的心情。
-          if (mood != null) 'mood': mood,
+          // mood 采用 always-write 口径：与 content/updated_at 一样总是写，
+          // 传入 mood 为 null 即清除库中已有的心情（AC-07）。这与 deleted_at
+          // 的「非空才写」不同——deleted_at 有 restore() 伴生清除（显式写
+          // null），编辑正文时构造的 Entry 不带 deletedAt，若整体写 null 会
+          // 无声复活条目；mood 没有这种伴生操作，靠 save 本身即可清除。
+          'mood': mood,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -106,7 +109,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'updated_at': entry.updatedAt.millisecondsSinceEpoch,
           'day_key': entry.dayKey,
           if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
-          if (mood != null) 'mood': mood,
+          // mood 总是写：与 update 分支同口径，null 即不写心情。
+          'mood': mood,
         });
       }
     });
