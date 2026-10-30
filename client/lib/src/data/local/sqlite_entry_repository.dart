@@ -80,6 +80,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     }
     final db = await _database();
     final deletedAt = entry.deletedAt;
+    final mood = entry.mood;
     await db.transaction((txn) async {
       final updated = await txn.update(
         'entries',
@@ -90,6 +91,9 @@ class SqliteEntryRepository implements LocalEntryRepository {
           // 调用方构造的 Entry 不带 deletedAt，库里的删除标记必须留着，
           // 否则条目会被无声复活回到时间轴。
           if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
+          // mood 与 deleted_at 同口径：只在显式带上时才写，编辑正文不带
+          // mood 的 Entry 不会覆盖库里已有的心情。
+          if (mood != null) 'mood': mood,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -102,6 +106,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'updated_at': entry.updatedAt.millisecondsSinceEpoch,
           'day_key': entry.dayKey,
           if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
+          if (mood != null) 'mood': mood,
         });
       }
     });
@@ -305,6 +310,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
 
   Entry _toEntry(Map<String, Object?> row) {
     final deletedAt = row['deleted_at'] as int?;
+    final mood = row['mood'] as String?;
     return Entry(
       id: row['id'] as String,
       content: row['content'] as String,
@@ -320,6 +326,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       deletedAt: deletedAt == null
           ? null
           : DateTime.fromMillisecondsSinceEpoch(deletedAt, isUtc: true),
+      mood: mood,
     );
   }
 

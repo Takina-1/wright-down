@@ -19,11 +19,12 @@ Future<void> deleteTempDir(Directory temp) async {
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  Entry _entry(String id, String content) => Entry(
+  Entry _entry(String id, String content,
+      {String? mood, DateTime? updated}) => Entry(
     id: id, content: content,
     createdAt: DateTime.utc(2026, 10, 30, 2, 0),
-    updatedAt: DateTime.utc(2026, 10, 30, 2, 0),
-    dayKey: '2026-10-30',
+    updatedAt: updated ?? DateTime.utc(2026, 10, 30, 2, 0),
+    dayKey: '2026-10-30', mood: mood,
   );
 
   test('v3 库的 entries 表含 mood 列', () async {
@@ -152,5 +153,75 @@ void main() {
       isNull,
       reason: '老行的 mood 必须为 NULL，不能是占位值',
     );
+  });
+
+  test('save 带 mood 后 list 与 exportAll 能读回', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    await repo.save(_entry('m1', '今天很开心', mood: 'happy'));
+    expect((await repo.list()).single.mood, 'happy');
+    expect((await repo.exportAll()).single.mood, 'happy');
+  });
+
+  test('mood 为空时列存 NULL，读回 null', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    await repo.save(_entry('m2', '没有心情'));
+    expect((await repo.list()).single.mood, isNull);
+  });
+
+  test('编辑不带 mood 的 Entry 不会覆盖已有 mood', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    await repo.save(_entry('m3', 'a', mood: 'happy'));
+    // 编辑器保存正文时构造的 Entry 不带 mood
+    await repo.save(Entry(
+      id: 'm3', content: 'a 改',
+      createdAt: DateTime.utc(2026, 10, 30, 2, 0),
+      updatedAt: DateTime.utc(2026, 10, 30, 3, 0),
+      dayKey: '2026-10-30',
+    ));
+    expect((await repo.list()).single.mood, 'happy');
+  });
+
+  test('编辑带新 mood 的 Entry 会更新 mood', () async {
+    final factory = databaseFactoryFfi;
+    final temp = await Directory.systemTemp.createTemp('local_diary_mood_');
+    final path = '${temp.path}/journal.db';
+    final repo = SqliteEntryRepository(factory: factory, path: path);
+    addTearDown(() async {
+      await repo.close();
+      await factory.deleteDatabase(path);
+      await deleteTempDir(temp);
+    });
+
+    await repo.save(_entry('m4', 'a', mood: 'happy'));
+    await repo.save(_entry('m4', 'a 改', mood: 'sad',
+      updated: DateTime.utc(2026, 10, 30, 3, 0)));
+    expect((await repo.list()).single.mood, 'sad');
   });
 }
