@@ -57,4 +57,25 @@ void main() {
     await editor.newEntry();
     expect(editor.mood, isNull);
   });
+
+  testWidgets('编辑已存条目、只改心情不改正文时 mood 仍落库', (tester) async {
+    // 暴露 Critical 缺陷：_dirty 只比 content，只改 mood 时 flush 早退，
+    // mood 静默不落库（AC-03 失败）。修复后 _dirty 纳入 mood 比较。
+    final entry = Entry(
+      id: 'existing-1',
+      content: '旧正文',
+      createdAt: DateTime(2026, 10, 30, 2, 0),
+      updatedAt: DateTime(2026, 10, 30, 2, 0),
+      dayKey: '2026-10-30',
+      mood: 'sad',
+    );
+    repo.entries[entry.id] = entry;
+    await editor.edit(entry);
+    // 不改正文，只改心情
+    editor.setMood('happy');
+    await tester.pump(const Duration(seconds: 2));
+    expect(repo.entries[entry.id]!.mood, 'happy');
+    // 正文未被改动，仍是原值
+    expect(repo.entries[entry.id]!.content, '旧正文');
+  });
 }

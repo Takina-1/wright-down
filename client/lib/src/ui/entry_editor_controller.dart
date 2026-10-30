@@ -18,6 +18,7 @@ class EntryEditorController extends ChangeNotifier {
   final DateTime Function() now;
   String _content = '';
   String _savedContent = '';
+  String? _savedMood;
   String? _id;
   DateTime? _createdAt;
   String? _dayKey;
@@ -40,7 +41,9 @@ class EntryEditorController extends ChangeNotifier {
   /// 删除失败不该把状态显示成「保存失败」，也不该出现「重试保存」按钮。
   String? get deleteError => _deleteError;
   bool get _dirty =>
-      _persisted ? _content != _savedContent : _content.trim().isNotEmpty;
+      _persisted
+          ? _content != _savedContent || _mood != _savedMood
+          : _content.trim().isNotEmpty;
   bool get hasPendingChanges => _writing || _dirty;
 
   void _notify() {
@@ -115,6 +118,7 @@ class EntryEditorController extends ChangeNotifier {
         await repository.save(snapshot);
         _persisted = true;
         _savedContent = snapshot.content;
+        _savedMood = snapshot.mood;
       } catch (_) {
         _timer?.cancel();
         _status = SaveStatus.error;
@@ -135,6 +139,7 @@ class EntryEditorController extends ChangeNotifier {
   Future<bool> newEntry() async {
     if (!await flush() || _disposed) return false;
     _content = _savedContent = '';
+    _savedMood = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
@@ -152,7 +157,7 @@ class EntryEditorController extends ChangeNotifier {
     _id = entry.id;
     _createdAt = entry.createdAt;
     _dayKey = entry.dayKey;
-    _mood = entry.mood;
+    _mood = _savedMood = entry.mood;
     _persisted = true;
     _error = null;
     _deleteError = null;
@@ -201,6 +206,7 @@ class EntryEditorController extends ChangeNotifier {
     }
     _timer?.cancel();
     _content = _savedContent = '';
+    _savedMood = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
@@ -221,6 +227,7 @@ class EntryEditorController extends ChangeNotifier {
     if (_disposed || _id != id) return false;
     _timer?.cancel();
     _content = _savedContent = '';
+    _savedMood = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
