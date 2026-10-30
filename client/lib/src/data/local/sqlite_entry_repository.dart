@@ -98,8 +98,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
     final rows = await db.query(
       'entries',
       where: before == null
-          ? null
-          : '(created_at < ? OR (created_at = ? AND id < ?))',
+          ? 'deleted_at IS NULL'
+          : 'deleted_at IS NULL AND (created_at < ? OR (created_at = ? AND id < ?))',
       whereArgs: before == null
           ? null
           : [
@@ -120,32 +120,71 @@ class SqliteEntryRepository implements LocalEntryRepository {
     return rows.map(_toEntry).toList();
   }
 
-  // TODO(F005 Task 3): 实现 SQLite 侧的软删除/恢复/彻底删除。
-  // 这里只保留占位实现，让接口先行落地时整个包仍可编译分析。
-
   @override
   Future<List<Entry>> listDeleted({int limit = 30}) async {
-    throw UnimplementedError('SqliteEntryRepository.listDeleted');
+    if (limit < 1) throw ArgumentError.value(limit, 'limit');
+    final db = await _database();
+    final rows = await db.query(
+      'entries',
+      where: 'deleted_at IS NOT NULL',
+      orderBy: 'deleted_at DESC, id DESC',
+      limit: limit,
+    );
+    return rows.map(_toEntry).toList();
   }
 
   @override
   Future<void> softDelete(String id) async {
-    throw UnimplementedError('SqliteEntryRepository.softDelete');
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    final db = await _database();
+    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final updated = await db.update(
+      'entries',
+      {'deleted_at': stamp, 'updated_at': stamp},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (updated == 0) {
+      throw StateError('No such entry: $id');
+    }
   }
 
   @override
   Future<void> restore(String id) async {
-    throw UnimplementedError('SqliteEntryRepository.restore');
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    final db = await _database();
+    final stamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    // 只对已删除的条目生效：未删除的条目没有可恢复的删除标记。
+    final updated = await db.update(
+      'entries',
+      {'deleted_at': null, 'updated_at': stamp},
+      where: 'id = ? AND deleted_at IS NOT NULL',
+      whereArgs: [id],
+    );
+    if (updated == 0) {
+      throw StateError('Entry $id is not in the trash');
+    }
   }
 
   @override
   Future<void> purge(String id) async {
-    throw UnimplementedError('SqliteEntryRepository.purge');
+    if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    final db = await _database();
+    // 不限制是否已删除：删除标记由调用方限定在回收站页。
+    final deleted = await db.delete(
+      'entries',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (deleted == 0) {
+      throw StateError('No such entry: $id');
+    }
   }
 
   @override
   Future<int> purgeAll() async {
-    throw UnimplementedError('SqliteEntryRepository.purgeAll');
+    final db = await _database();
+    return db.delete('entries', where: 'deleted_at IS NOT NULL');
   }
 
   @override
@@ -206,19 +245,25 @@ class SqliteEntryRepository implements LocalEntryRepository {
     );
   }
 
-  Entry _toEntry(Map<String, Object?> row) => Entry(
-    id: row['id'] as String,
-    content: row['content'] as String,
-    createdAt: DateTime.fromMillisecondsSinceEpoch(
-      row['created_at'] as int,
-      isUtc: true,
-    ),
-    updatedAt: DateTime.fromMillisecondsSinceEpoch(
-      row['updated_at'] as int,
-      isUtc: true,
-    ),
-    dayKey: row['day_key'] as String,
-  );
+  Entry _toEntry(Map<String, Object?> row) {
+    final deletedAt = row['deleted_at'] as int?;
+    return Entry(
+      id: row['id'] as String,
+      content: row['content'] as String,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        row['created_at'] as int,
+        isUtc: true,
+      ),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        row['updated_at'] as int,
+        isUtc: true,
+      ),
+      dayKey: row['day_key'] as String,
+      deletedAt: deletedAt == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(deletedAt, isUtc: true),
+    );
+  }
 
   @override
   Future<void> close() async {
