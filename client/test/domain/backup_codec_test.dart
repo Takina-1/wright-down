@@ -17,7 +17,8 @@ void main() {
     final original = entry('a', '今天走了很远。\n明天继续 🌿');
     final text = codec.encode([original], exportedAt: created);
     final decoded = codec.decode(text);
-    expect(decoded.version, 1);
+    // 备份格式已升到版本 2。
+    expect(decoded.version, 2);
     expect(decoded.exportedAt, created);
     expect(decoded.entries, hasLength(1));
     expect(decoded.entries.single.id, 'a');
@@ -63,7 +64,7 @@ void main() {
   test('a newer backup version asks the user to update the app', () {
     expect(
       () => codec.decode(
-        '{"format":"local-diary-backup","version":2,"entries":[]}',
+        '{"format":"local-diary-backup","version":3,"entries":[]}',
       ),
       throwsA(
         isA<BackupFormatException>().having(
@@ -79,6 +80,7 @@ void main() {
     const broken =
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z"}]}';
@@ -97,6 +99,7 @@ void main() {
   test('a backup without an export time is reported as damaged', () {
     const broken =
         '{"format":"local-diary-backup","version":1,'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z",'
@@ -117,6 +120,7 @@ void main() {
     const broken =
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":42,"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
     expect(
@@ -135,6 +139,7 @@ void main() {
     const duplicated =
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":2,'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z",'
@@ -159,11 +164,13 @@ void main() {
     const empty =
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":"","createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
     const whitespace =
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":"   \\n  ","createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z","dayKey":"2026-10-28"}]}';
     for (final broken in [empty, whitespace]) {
@@ -185,6 +192,7 @@ void main() {
     String backupWith(String dayKey) =>
         '{"format":"local-diary-backup","version":1,'
         '"exportedAt":"2026-10-28T08:00:00.000Z",'
+        '"entryCount":1,'
         '"entries":[{"id":"a","content":"正文",'
         '"createdAt":"2026-10-28T08:00:00.000Z",'
         '"updatedAt":"2026-10-28T08:00:00.000Z",'
@@ -203,5 +211,202 @@ void main() {
         reason: 'dayKey "$bad" 必须被整体拒绝',
       );
     }
+  });
+
+  group('备份格式版本 2', () {
+    test('已删除条目编码后带 deletedAt，解码后能读回', () {
+      final codec = BackupCodec();
+      final deleted = Entry(
+        id: 'a',
+        content: '写错了',
+        createdAt: DateTime.utc(2026, 10, 28, 3),
+        updatedAt: DateTime.utc(2026, 10, 30, 1),
+        dayKey: '2026-10-28',
+        deletedAt: DateTime.utc(2026, 10, 30, 1),
+      );
+      final live = Entry(
+        id: 'b',
+        content: '正常记录',
+        createdAt: DateTime.utc(2026, 10, 29, 3),
+        updatedAt: DateTime.utc(2026, 10, 29, 3),
+        dayKey: '2026-10-29',
+      );
+
+      final text = codec.encode([deleted, live]);
+      expect(text, contains('"version": 2'));
+      expect(text, contains('deletedAt'));
+
+      final document = codec.decode(text);
+      expect(document.version, 2);
+      expect(document.entries, hasLength(2));
+      expect(document.entries.first.deletedAt, DateTime.utc(2026, 10, 30, 1));
+      expect(document.entries.last.deletedAt, isNull);
+    });
+
+    test('version 1 的旧备份仍可导入，且条目一律视为未删除', () {
+      const legacy = '''{
+        "format": "local-diary-backup",
+        "version": 1,
+        "exportedAt": "2026-10-28T02:00:00.000Z",
+        "entryCount": 1,
+        "entries": [
+          {
+            "id": "old-1",
+            "content": "旧版本写的记录",
+            "createdAt": "2026-10-28T02:00:00.000Z",
+            "updatedAt": "2026-10-28T02:00:00.000Z",
+            "dayKey": "2026-10-28"
+          }
+        ]
+      }''';
+      final document = const BackupCodec().decode(legacy);
+      expect(document.version, 1);
+      expect(document.entries.single.deletedAt, isNull);
+    });
+
+    test('version 为 0 判损坏', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":0,'
+          '"exportedAt":"2026-10-28T02:00:00.000Z","entryCount":0,"entries":[]}',
+        ),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('version 高于当前支持时提示升级', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":3,'
+          '"exportedAt":"2026-10-28T02:00:00.000Z","entryCount":0,"entries":[]}',
+        ),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '备份来自更新的版本，请先升级应用',
+          ),
+        ),
+      );
+    });
+
+    test('entryCount 与实际条数不符判损坏', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":2,'
+          '"exportedAt":"2026-10-28T02:00:00.000Z","entryCount":9,"entries":[]}',
+        ),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('时间串缺时区偏移判损坏', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":2,'
+          '"exportedAt":"2026-10-28T02:00:00","entryCount":0,"entries":[]}',
+        ),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('未删除的条目不写 deletedAt 键', () {
+      final text = const BackupCodec().encode([
+        Entry(
+          id: 'live',
+          content: '还活着',
+          createdAt: DateTime.utc(2026, 10, 29, 3),
+          updatedAt: DateTime.utc(2026, 10, 29, 3),
+          dayKey: '2026-10-29',
+        ),
+      ]);
+      expect(text, isNot(contains('deletedAt')));
+    });
+
+    test('entryCount 缺失判损坏', () {
+      expect(
+        () => const BackupCodec().decode(
+          '{"format":"local-diary-backup","version":2,'
+          '"exportedAt":"2026-10-28T02:00:00.000Z","entries":[]}',
+        ),
+        throwsA(isA<BackupFormatException>()),
+      );
+    });
+
+    test('条目数据不完整时拒绝导出', () {
+      final broken = Entry(
+        id: '',
+        content: '正文',
+        createdAt: DateTime.utc(2026, 10, 28, 3),
+        updatedAt: DateTime.utc(2026, 10, 28, 3),
+        dayKey: '2026-10-28',
+      );
+      expect(
+        () => const BackupCodec().encode([broken]),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '有条记录数据不完整，无法导出',
+          ),
+        ),
+      );
+    });
+
+    test('条目正文全为空白时拒绝导出', () {
+      expect(
+        () => const BackupCodec().encode([
+          Entry(
+            id: 'a',
+            content: '   \n  ',
+            createdAt: DateTime.utc(2026, 10, 28, 3),
+            updatedAt: DateTime.utc(2026, 10, 28, 3),
+            dayKey: '2026-10-28',
+          ),
+        ]),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '有条记录数据不完整，无法导出',
+          ),
+        ),
+      );
+    });
+
+    test('解码后的条目列表不可修改', () {
+      final document = const BackupCodec().decode(
+        '{"format":"local-diary-backup","version":2,'
+        '"exportedAt":"2026-10-28T02:00:00.000Z","entryCount":1,'
+        '"entries":[{"id":"a","content":"正文",'
+        '"createdAt":"2026-10-28T02:00:00.000Z",'
+        '"updatedAt":"2026-10-28T02:00:00.000Z","dayKey":"2026-10-28"}]}',
+      );
+      expect(
+        () => document.entries.add(
+          Entry(
+            id: 'b',
+            content: '偷加的一条',
+            createdAt: DateTime.utc(2026, 10, 29),
+            updatedAt: DateTime.utc(2026, 10, 29),
+            dayKey: '2026-10-29',
+          ),
+        ),
+        throwsUnsupportedError,
+      );
+    });
+
+    test('JSON 缺右括号时按损坏处理', () {
+      expect(
+        () => const BackupCodec().decode('{"format":"local-diary-backup",'),
+        throwsA(
+          isA<BackupFormatException>().having(
+            (e) => e.reason,
+            'reason',
+            '这不是本应用的备份文件',
+          ),
+        ),
+      );
+    });
   });
 }

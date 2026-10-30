@@ -188,6 +188,47 @@ void main() {
     expect(gateway.sharedName, endsWith('.md'));
   });
 
+  test('the backup counts every entry while the markdown counts only the visible ones', () async {
+    final repo = MemoryRepository();
+    repo.entries['a'] = entry('a', '第一条');
+    repo.entries['b'] = Entry(
+      id: 'b',
+      content: '已删除的一条',
+      createdAt: time,
+      updatedAt: time,
+      dayKey: '2026-10-28',
+      deletedAt: time,
+    );
+    final gateway = FakeFileGateway();
+    final controller = ExportController(repository: repo, fileGateway: gateway);
+
+    expect(await controller.exportBackup(), isTrue);
+    expect(controller.message, '已导出 2 条');
+
+    expect(await controller.exportMarkdown(), isTrue);
+    expect(controller.message, '已导出 1 条');
+  });
+
+  test('a broken entry is reported with the encoding reason', () async {
+    final repo = MemoryRepository();
+    repo.entries['a'] = Entry(
+      id: 'a',
+      content: '   ',
+      createdAt: time,
+      updatedAt: time,
+      dayKey: '2026-10-28',
+    );
+    final gateway = FakeFileGateway();
+    final controller = ExportController(repository: repo, fileGateway: gateway);
+
+    final ok = await controller.exportBackup();
+
+    expect(ok, isFalse);
+    expect(controller.status, ExportStatus.failure);
+    expect(controller.message, '有条记录数据不完整，无法导出');
+    expect(gateway.savedBytes, isNull);
+  });
+
   test('nothing can be shared before the first export', () async {
     final repo = MemoryRepository();
     final gateway = FakeFileGateway();

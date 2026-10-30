@@ -4,6 +4,10 @@ import '../entry.dart';
 class MarkdownExporter {
   const MarkdownExporter();
 
+  /// 可读导出只渲染未删除条目，条数与渲染结果一致。
+  int visibleCount(List<Entry> entries) =>
+      entries.where((entry) => entry.deletedAt == null).length;
+
   String render(List<Entry> entries, {DateTime? exportedAt}) {
     final stamp = (exportedAt ?? DateTime.now()).toUtc().toIso8601String();
     final sorted = [...entries]

@@ -60,18 +60,21 @@ class ExportController extends ChangeNotifier {
   Future<bool> exportBackup() => _export(
     extension: 'json',
     mimeType: 'application/json',
+    count: (entries) => entries.length,
     encode: (entries) => _codec.encode(entries, exportedAt: _now()),
   );
 
   Future<bool> exportMarkdown() => _export(
     extension: 'md',
     mimeType: 'text/markdown',
+    count: (entries) => _markdownExporter.visibleCount(entries),
     encode: (entries) => _markdownExporter.render(entries, exportedAt: _now()),
   );
 
   Future<bool> _export({
     required String extension,
     required String mimeType,
+    required int Function(List<Entry> entries) count,
     required String Function(List<Entry> entries) encode,
   }) async {
     _status = ExportStatus.working;
@@ -98,9 +101,15 @@ class ExportController extends ChangeNotifier {
       _lastExportBytes = bytes;
       _lastExportName = name;
       _status = ExportStatus.success;
-      _message = '已导出 ${entries.length} 条';
+      _message = '已导出 ${count(entries)} 条';
       _notify();
       return true;
+    } on BackupFormatException catch (error) {
+      debugPrint('导出失败：${error.reason}');
+      _status = ExportStatus.failure;
+      _message = error.reason;
+      _notify();
+      return false;
     } catch (error) {
       debugPrint('导出失败：$error');
       _status = ExportStatus.failure;
