@@ -135,6 +135,12 @@ class BackupCodec {
       throw const BackupFormatException(damagedReason);
     }
     final rawDeletedAt = raw['deletedAt'];
+    // mood 是可选字段：缺失（null）合法，视为未设心情；存在但非字符串说明备份已损坏，
+    // 与 id/content/dayKey 的口径一致——抛 BackupFormatException 而非让 TypeError 逃逸。
+    final rawMood = raw['mood'];
+    if (rawMood != null && rawMood is! String) {
+      throw const BackupFormatException(damagedReason);
+    }
     return Entry(
       id: id,
       content: content,
@@ -142,7 +148,7 @@ class BackupCodec {
       updatedAt: _parseDate(raw['updatedAt']),
       dayKey: dayKey,
       deletedAt: rawDeletedAt == null ? null : _parseDate(rawDeletedAt),
-      mood: raw['mood'] as String?,
+      mood: rawMood as String?,
     );
   }
 

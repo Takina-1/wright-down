@@ -44,4 +44,31 @@ void main() {
 }''';
     expect(codec.decode(old).entries.single.mood, isNull);
   });
+
+  test('mood 存在但非字符串（如数字）判损坏，抛 BackupFormatException 而非 TypeError', () {
+    const damaged = '''{
+  "format": "local-diary-backup",
+  "version": 2,
+  "exportedAt": "2026-10-30T02:00:00.000Z",
+  "entryCount": 1,
+  "entries": [{
+    "id": "e5",
+    "content": "损坏记录",
+    "createdAt": "2026-10-30T02:00:00.000Z",
+    "updatedAt": "2026-10-30T02:00:00.000Z",
+    "dayKey": "2026-10-30",
+    "mood": 123
+  }]
+}''';
+    expect(
+      () => codec.decode(damaged),
+      throwsA(
+        isA<BackupFormatException>().having(
+          (e) => e.reason,
+          'reason',
+          BackupCodec.damagedReason,
+        ),
+      ),
+    );
+  });
 }
