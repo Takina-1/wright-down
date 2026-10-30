@@ -114,6 +114,82 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  /// 删除当前编辑的条目。确认后条目移入回收站，编辑器复位。
+  Future<void> _deleteCurrentEntry() async {
+    if (_transitioning) return;
+    // 删除成功后编辑器会复位，ID 会被清空，先记下来给撤销用。
+    final id = _editor.currentEntryId;
+    if (id == null) return;
+    final content = _editor.content;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除这条记录？'),
+        content: Text('${_snippet(content)}\n\n删除后可在回收站找回。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            key: const Key('composer-delete-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    // SnackBar 挂在 app 级的 ScaffoldMessenger 上，可能比这个页面活得久
+    // （切 Tab 会重建页面）。把仓储取到局部变量，撤销回调就不依赖可能
+    // 已卸载的 State，也不会在 State defunct 后再碰 widget。
+    final repository = widget.repository;
+    setState(() {
+      _transitioning = true;
+    });
+    final deleted = await _editor.deleteCurrent();
+    if (!mounted) return;
+    setState(() {
+      _transitioning = false;
+    });
+    if (!deleted) {
+      // 删除失败用控制器给的删除错误文案，不要复用保存错误：
+      // 界面上的「保存失败」和「重试保存」对删除来说都不对。
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_editor.deleteError ?? '删除失败，这条记录仍在')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('已移到回收站'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => unawaited(_undoDelete(id, repository)),
+        ),
+      ),
+    );
+  }
+
+  /// 撤销删除：把条目从回收站恢复回来。
+  ///
+  /// 仓储由调用方传入而不是从 `widget` 取：撤销入口挂在 app 级的
+  /// ScaffoldMessenger 上，页面此时可能已经卸载，State defunct 后再碰
+  /// `widget` 不可靠。
+  Future<void> _undoDelete(String id, LocalEntryRepository repository) async {
+    try {
+      await repository.restore(id);
+    } catch (error) {
+      debugPrint('恢复失败：$error');
+    }
+  }
+
+  /// 确认对话框里的内容摘要。
+  String _snippet(String content) {
+    final flat = content.replaceAll('\n', ' ').trim();
+    return flat.length <= 20 ? flat : '${flat.substring(0, 20)}…';
+  }
+
   Future<void> _exit() async {
     if (_transitioning) return;
     setState(() {
@@ -287,6 +363,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
+              if (_editor.canDelete)
+                TextButton(
+                  key: const Key('composer-delete'),
+                  onPressed: _transitioning ? null : _deleteCurrentEntry,
+                  child: const Text('删除这条'),
+                ),
               TextButton.icon(
                 onPressed: _transitioning ? null : _nextEntry,
                 icon: const Icon(Icons.add, size: 18),

@@ -114,4 +114,149 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('还没有记录'), findsOneWidget);
   });
+
+  testWidgets('编辑已有条目时出现删除按钮，新记录时不出现', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除这条'), findsNothing);
+    expect(find.byKey(const Key('composer-delete')), findsNothing);
+
+    // 先写一条并保存，再从回顾页点开它。
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除这条'), findsOneWidget);
+    expect(find.byKey(const Key('composer-delete')), findsOneWidget);
+  });
+
+  testWidgets('确认删除后编辑器复位并可撤销', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    // 确认框里要有正文摘要和回收站提示。
+    expect(find.text('删除这条记录？'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('第一条记录'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('删除后可在回收站找回。'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('composer-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已移到回收站'), findsOneWidget);
+    expect(find.text('撤销'), findsOneWidget);
+    // 编辑器已复位成空白的新记录
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('entry-content')),
+    );
+    expect(field.controller!.text, isEmpty);
+    expect(repo.entries.values.single.deletedAt, isNotNull);
+
+    // 撤销：条目回到时间轴。
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+    expect(repo.entries.values.single.deletedAt, isNull);
+  });
+
+  testWidgets('取消删除对话框时条目与编辑器内容都不变', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    expect(find.text('删除这条记录？'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除这条记录？'), findsNothing);
+    expect(repo.entries.values.single.deletedAt, isNull);
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('entry-content')),
+    );
+    expect(field.controller!.text, '第一条记录');
+    expect(find.text('删除这条'), findsOneWidget);
+  });
+
+  testWidgets('删除确认框里的正文摘要截断到二十字', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    const long = '这是很长的一段正文内容用来测试截断行为超过二十个字';
+    await tester.enterText(find.byKey(const Key('entry-content')), long);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(long));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+
+    final dialogText = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('删除后可在回收站找回。'),
+      ),
+    );
+    expect(dialogText.data, '${long.substring(0, 20)}…\n\n删除后可在回收站找回。');
+  });
+
+  testWidgets('删除失败时提示且条目仍在编辑器里', (tester) async {
+    final repo = MemoryRepository()..failDelete = true;
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('删除失败'), findsOneWidget);
+    expect(find.text('已移到回收站'), findsNothing);
+    expect(repo.entries.values.single.deletedAt, isNull);
+    final field = tester.widget<TextField>(
+      find.byKey(const Key('entry-content')),
+    );
+    expect(field.controller!.text, '第一条记录');
+    // 删除失败不该借用保存错误的界面。
+    expect(find.text('重试保存'), findsNothing);
+    expect(find.text('保存失败'), findsNothing);
+  });
 }
