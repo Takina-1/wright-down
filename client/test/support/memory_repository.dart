@@ -22,6 +22,9 @@ class MemoryRepository implements LocalEntryRepository {
   /// 删除类操作（软删除、彻底删除、清空回收站）统一失败开关。
   bool failDelete = false;
 
+  /// 回收站读取失败开关。只影响 [listDeleted]，与 [failList] 相互独立。
+  bool failListDeleted = false;
+
   Completer<void>? gate;
 
   @override
@@ -66,9 +69,12 @@ class MemoryRepository implements LocalEntryRepository {
 
   @override
   Future<List<Entry>> listDeleted({int limit = 30}) async {
+    if (failListDeleted) throw StateError('simulated read failure');
     final sorted = entries.values.where((e) => e.deletedAt != null).toList()
       ..sort((a, b) {
-        final time = b.deletedAt!.compareTo(a.deletedAt!);
+        // 与生产实现口径一致：按 epoch 毫秒整数比较，不用微秒精度的 DateTime。
+        final time = b.deletedAt!.millisecondsSinceEpoch
+            .compareTo(a.deletedAt!.millisecondsSinceEpoch);
         return time == 0 ? b.id.compareTo(a.id) : time;
       });
     return sorted.take(limit).toList();
