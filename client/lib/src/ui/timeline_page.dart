@@ -124,7 +124,7 @@ class _TimelinePageState extends State<TimelinePage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除这条记录？'),
-        content: Text('${_snippet(entry.content)}\n\n删除后可在回收站找回。'),
+        content: Text(_deleteDialogBody(entry.content)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -214,6 +214,16 @@ class _TimelinePageState extends State<TimelinePage> {
       index++;
     }
     return index;
+  }
+
+  /// 确认对话框的正文：内容摘要 + 回收站提示。
+  ///
+  /// 摘要为空时不写摘要，也就不留前导空行，否则对话框正文会以两个
+  /// 空行开头。
+  String _deleteDialogBody(String content) {
+    final snippet = _snippet(content);
+    const hint = '删除后可在回收站找回。';
+    return snippet.isEmpty ? hint : '$snippet\n\n$hint';
   }
 
   /// 确认对话框里的内容摘要。

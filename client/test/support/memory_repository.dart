@@ -25,7 +25,14 @@ class MemoryRepository implements LocalEntryRepository {
   /// 回收站读取失败开关。只影响 [listDeleted]，与 [failList] 相互独立。
   bool failListDeleted = false;
 
+  /// 保存挂起点：置为未完成的 Completer 时，[save] 会先挂起。
   Completer<void>? gate;
+
+  /// 软删除挂起点：置为未完成的 Completer 时，[softDelete] 会先挂起。
+  ///
+  /// 与 [gate] 相互独立：一个挂起保存，一个挂起删除，方便分别构造
+  /// 「正在保存」和「正在删除」两种中间态。
+  Completer<void>? deleteGate;
 
   @override
   Future<void> save(Entry entry) async {
@@ -104,6 +111,8 @@ class MemoryRepository implements LocalEntryRepository {
   @override
   Future<void> softDelete(String id) async {
     if (id.isEmpty) throw ArgumentError.value(id, 'id');
+    final waitFor = deleteGate;
+    if (waitFor != null) await waitFor.future;
     if (failDelete) throw StateError('simulated delete failure');
     final existing = entries[id];
     if (existing == null) throw StateError('No such entry: $id');

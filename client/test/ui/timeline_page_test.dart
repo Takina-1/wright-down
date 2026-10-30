@@ -326,6 +326,35 @@ void main() {
     expect(titles.last, '条目01');
   });
 
+  testWidgets('删除确认框里的正文摘要截断到二十字', (tester) async {
+    final repo = MemoryRepository();
+    const long = '这是很长的一段正文内容用来测试截断行为超过二十个字';
+    await repo.save(
+      Entry(
+        id: 'long',
+        content: long,
+        createdAt: created,
+        updatedAt: created,
+        dayKey: '2026-10-28',
+      ),
+    );
+    await showTimeline(tester, repo);
+
+    await tester.longPress(find.text(long));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('timeline-action-delete')));
+    await tester.pumpAndSettle();
+
+    // 确认框里显示的是前 20 字加省略号，不是完整正文。
+    final dialogText = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('删除后可在回收站找回。'),
+      ),
+    );
+    expect(dialogText.data, '${long.substring(0, 20)}…\n\n删除后可在回收站找回。');
+  });
+
   testWidgets('撤销失败时提示用户到回收站重试', (tester) async {
     final repo = _FailingRestoreRepository();
     await repo.save(

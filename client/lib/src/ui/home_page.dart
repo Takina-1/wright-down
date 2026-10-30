@@ -125,7 +125,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除这条记录？'),
-        content: Text('${_snippet(content)}\n\n删除后可在回收站找回。'),
+        content: Text(_deleteDialogBody(content)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -153,11 +153,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _transitioning = false;
     });
     if (!deleted) {
-      // 删除失败用控制器给的删除错误文案，不要复用保存错误：
-      // 界面上的「保存失败」和「重试保存」对删除来说都不对。
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_editor.deleteError ?? '删除失败，这条记录仍在')),
-      );
+      // 删除失败要给出最贴近真实原因的那条文案：
+      // deleteCurrent() 在正文有改动时会先落盘，若这次保存失败，
+      // 它提前返回 false 且不设删除错误——此时只有保存错误说明问题。
+      // 反过来，删除本身失败时保存错误是 null，落到删除错误上。
+      final reason = _editor.error ?? _editor.deleteError ?? '删除失败，这条记录仍在';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(reason)));
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -181,7 +182,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await repository.restore(id);
     } catch (error) {
       debugPrint('恢复失败：$error');
+      // 恢复失败必须让用户看见：只 debugPrint 的话，用户点了撤销却看不到
+      // 条目回来，以为撤销没生效。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('恢复失败，请到回收站重试')),
+      );
     }
+  }
+
+  /// 确认对话框的正文：内容摘要 + 回收站提示。
+  ///
+  /// 摘要为空时不写摘要，也就不留前导空行，否则对话框正文会以两个
+  /// 空行开头。
+  String _deleteDialogBody(String content) {
+    final snippet = _snippet(content);
+    const hint = '删除后可在回收站找回。';
+    return snippet.isEmpty ? hint : '$snippet\n\n$hint';
   }
 
   /// 确认对话框里的内容摘要。

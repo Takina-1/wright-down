@@ -1,8 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/app.dart';
 
 import '../support/memory_repository.dart';
+
+/// 恢复必定失败的仓储，用来验证「撤销失败必须给用户提示」。
+///
+/// 只覆盖 [MemoryRepository.restore]，其余行为与生产仓储一致。
+class _FailingRestoreRepository extends MemoryRepository {
+  @override
+  Future<void> restore(String id) async {
+    throw StateError('simulated restore failure');
+  }
+}
 
 void main() {
   testWidgets('backgrounding flushes input before the debounce expires', (
@@ -258,5 +270,107 @@ void main() {
     // 删除失败不该借用保存错误的界面。
     expect(find.text('重试保存'), findsNothing);
     expect(find.text('保存失败'), findsNothing);
+  });
+
+  testWidgets('删除进行中禁用删除与下一条按钮且输入框只读', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    // 把软删除挂起：删除流程停在半路，界面应进入过渡态。
+    final gate = Completer<void>();
+    repo.deleteGate = gate;
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer-delete-confirm')));
+    await tester.pump();
+
+    // 过渡态：两个按钮都禁用，输入框只读。
+    expect(
+      tester.widget<TextButton>(find.byKey(const Key('composer-delete'))).onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '下一条'))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester.widget<TextField>(find.byKey(const Key('entry-content'))).readOnly,
+      isTrue,
+    );
+
+    // 放行删除，条目应被移走。
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(repo.entries.values.single.deletedAt, isNotNull);
+  });
+
+  testWidgets('撤销恢复失败时提示用户到回收站重试', (tester) async {
+    final repo = _FailingRestoreRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer-delete-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('已移到回收站'), findsOneWidget);
+
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+
+    // 恢复失败必须让用户看见，不能只 debugPrint。
+    expect(find.text('恢复失败，请到回收站重试'), findsOneWidget);
+    // 恢复失败，条目仍在回收站里。
+    expect(repo.entries.values.single.deletedAt, isNotNull);
+  });
+
+  testWidgets('删除前保存失败时优先提示保存失败原因', (tester) async {
+    final repo = MemoryRepository();
+    await tester.pumpWidget(JournalApp(repository: repo));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('entry-content')), '第一条记录');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('tab-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第一条记录'));
+    await tester.pumpAndSettle();
+
+    // 改了正文又存不下去：删除会先落盘，落盘失败后删除也应被拦下，
+    // 提示要指向真正的失败原因——保存失败。
+    repo.failSave = true;
+    await tester.enterText(find.byKey(const Key('entry-content')), '改过的内容');
+
+    await tester.tap(find.byKey(const Key('composer-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.textContaining('保存失败'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('已移到回收站'), findsNothing);
+    expect(repo.entries.values.single.deletedAt, isNull);
   });
 }
