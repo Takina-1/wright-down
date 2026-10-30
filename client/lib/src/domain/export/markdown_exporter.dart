@@ -9,8 +9,10 @@ class MarkdownExporter {
       entries.where((entry) => entry.deletedAt == null).length;
 
   String render(List<Entry> entries, {DateTime? exportedAt}) {
+    // 可读导出只给还在时间轴上的条目看：已删除的记录不该出现在阅读稿里。
+    final visible = entries.where((entry) => entry.deletedAt == null).toList();
     final stamp = (exportedAt ?? DateTime.now()).toUtc().toIso8601String();
-    final sorted = [...entries]
+    final sorted = [...visible]
       ..sort((a, b) {
         final byDay = b.dayKey.compareTo(a.dayKey);
         if (byDay != 0) return byDay;
@@ -21,7 +23,7 @@ class MarkdownExporter {
     final buffer = StringBuffer()
       ..writeln('---')
       ..writeln('exportedAt: $stamp')
-      ..writeln('entryCount: ${entries.length}')
+      ..writeln('entryCount: ${visible.length}')
       ..writeln('---')
       ..writeln()
       ..writeln('# 本地日记导出')

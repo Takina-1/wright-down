@@ -209,6 +209,25 @@ void main() {
     expect(controller.message, '已导出 1 条');
   });
 
+  test('导出的 Markdown 内容里不含已删除条目的正文', () async {
+    final repo = MemoryRepository();
+    repo.entries['a'] = entry('a', '第一条');
+    repo.entries['b'] = entry('b', '这条已经删掉了');
+    // 用仓库自身的软删除造出回收站条目，而不是手写 deletedAt。
+    await repo.softDelete('b');
+    final gateway = FakeFileGateway();
+    final controller = ExportController(repository: repo, fileGateway: gateway);
+
+    expect(await controller.exportMarkdown(), isTrue);
+
+    // 提示条数与文件内容必须一致：说「已导出 1 条」，文件里就只能有一篇。
+    expect(controller.message, '已导出 1 条');
+    final markdown = utf8.decode(gateway.savedBytes!);
+    expect(markdown, isNot(contains('这条已经删掉了')));
+    expect(markdown, contains('第一条'));
+    expect(markdown, contains('entryCount: 1'));
+  });
+
   test('a broken entry is reported with the encoding reason', () async {
     final repo = MemoryRepository();
     repo.entries['a'] = Entry(
