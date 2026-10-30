@@ -129,13 +129,13 @@ class Entry {
 |---|---|
 | `Future<List<Entry>> list({before, limit})` | **只返回未删除条目**（`deleted_at IS NULL`），排序不变 |
 | `Future<List<Entry>> exportAll()` | **返回全部条目，含已删除条目**，供备份携带删除标记 |
-| `Future<List<Entry>> listDeleted({int limit = 30})` | 回收站列表，按 `deleted_at DESC, id DESC` |
-| `Future<void> softDelete(String id)` | 软删除：置 `deleted_at` 与 `updated_at` 为当前时刻 |
-| `Future<void> restore(String id)` | 从回收站恢复：清空 `deleted_at`，`updated_at` 置为当前时刻 |
-| `Future<void> purge(String id)` | 彻底删除：`DELETE FROM entries WHERE id = ?` |
-| `Future<int> purgeAll()` | 清空回收站：删除所有已删除条目，返回删除条数 |
+| `Future<List<Entry>> listDeleted({int limit = 30})` | 回收站列表，按 `deleted_at DESC, id DESC`；**无游标**，超过 30 条更早的看不到 |
+| `Future<void> softDelete(String id)` | 软删除：置 `deleted_at` 为当前时刻，`updated_at` 取 `max(当前值, 当前时刻)` |
+| `Future<void> restore(String id)` | 从回收站恢复：清空 `deleted_at`，`updated_at` 取 `max(当前值, 当前时刻)`；只对已删除条目生效，否则抛 `StateError` |
+| `Future<void> purge(String id)` | 彻底删除：`DELETE FROM entries WHERE id = ? AND deleted_at IS NOT NULL`——**只允许删回收站里的条目**，活条目误传 ID 不会被物理移除 |
+| `Future<int> purgeAll()` | 清空回收站：删除所有已删除条目（`deleted_at IS NOT NULL`），返回删除条数 |
 
-软删除与恢复都更新 `updated_at`，是为了让备份合并的「谁的版本更新」判定对删除同样成立。
+软删除与恢复都更新 `updated_at`，是为了让备份合并的「谁的版本更新」判定对删除同样成立。两者写入的 `updated_at` 都取 `max(当前值, 当前时刻)`——版本戳只许增不许减，设备时钟回拨时不会让旧备份把刚恢复的条目打回删除状态。
 
 ### 5.4 备份格式 v2
 
@@ -252,19 +252,19 @@ client/lib/src/ui/local_data_page.dart               回收站入口
 
 | 任务 | 依赖 | 产出 | 检查方式 | 完成情况 |
 |---|---|---|---|---|
-| T1 | — | `Entry.deletedAt` 与仓库接口扩展 | 域层单测与静态分析 | 未开始 |
-| T2 | T1 | SQLite schema v2 与迁移 | 宿主 FFI 集成测试：v1 库升级后老数据完好 | 未开始 |
-| T3 | T2 | 软删除／恢复／彻底删除／清空／回收站列表 | 集成测试覆盖全部方法与边界 | 未开始 |
-| T4 | T1 | 备份编解码 v2 与 v1 兼容 | 编解码单测覆盖两种版本与全部拒绝分支 | 未开始 |
-| T5 | T3、T4 | 恢复合并规则调整 | 集成测试覆盖合并表全部六行与幂等 | 未开始 |
-| T6 | T1 | Markdown 过滤已删除条目 | 渲染单测 | 未开始 |
-| T7 | T1、T3 | `EntryEditorController.deleteCurrent` 与 `canDelete` | 控制器单测 | 未开始 |
-| T8 | T3 | 回顾页长按菜单与删除 | 组件测试 | 未开始 |
-| T9 | T3、T7 | 记录页删除按钮 | 组件测试 | 未开始 |
-| T10 | T3 | 回收站页 | 组件测试 | 未开始 |
-| T11 | T8~T10 | 「我的」页入口与本地数据说明文案 | 组件测试 | 未开始 |
-| T12 | T1~T11 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 未开始 |
-| T13 | T12 | 真机验收并更新报告与台账 | 按第 7 节执行 | 未开始 |
+| T1 | — | `Entry.deletedAt` 与仓库接口扩展 | 域层单测与静态分析 | 已完成 |
+| T2 | T1 | SQLite schema v2 与迁移 | 宿主 FFI 集成测试：v1 库升级后老数据完好 | 已完成（迁移改为幂等） |
+| T3 | T2 | 软删除／恢复／彻底删除／清空／回收站列表 | 集成测试覆盖全部方法与边界 | 已完成（版本戳单调；`purge` 只删回收站条目） |
+| T4 | T1 | 备份编解码 v2 与 v1 兼容 | 编解码单测覆盖两种版本与全部拒绝分支 | 已完成 |
+| T5 | T3、T4 | 恢复合并规则调整 | 集成测试覆盖合并表全部六行与幂等 | 已完成（生产与替身共用 `decideMerge`） |
+| T6 | T1 | Markdown 过滤已删除条目 | 渲染单测 | 已完成 |
+| T7 | T1、T3 | `EntryEditorController.deleteCurrent` 与 `canDelete` | 控制器单测 | 已完成（删除失败走独立 `deleteError`；另加 `markDeleted`） |
+| T8 | T3 | 回顾页长按菜单与删除 | 组件测试 | 已完成 |
+| T9 | T3、T7 | 记录页删除按钮 | 组件测试 | 已完成 |
+| T10 | T3 | 回收站页 | 组件测试 | 已完成 |
+| T11 | T8~T10 | 「我的」页入口与本地数据说明文案 | 组件测试 | 已完成 |
+| T12 | T1~T11 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 已完成 |
+| T13 | T12 | 真机验收并更新报告与台账 | 按第 7 节执行 | **部分完成**：报告与台账已更新；真机验收未执行（设备未连接） |
 
 ## 7. 测试计划
 
