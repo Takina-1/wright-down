@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/ui/entry_editor_controller.dart';

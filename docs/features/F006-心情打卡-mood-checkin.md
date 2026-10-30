@@ -198,15 +198,15 @@ client/lib/src/ui/timeline_page.dart               时间轴卡片显示心情 e
 
 | 任务 | 依赖 | 产出 | 检查方式 | 完成情况 |
 |---|---|---|---|---|
-| T1 | — | `Entry.mood` 与 `mood.dart` 映射表 | 域层单测 | 未开始 |
-| T2 | T1 | SQLite schema v3 与幂等迁移 | 宿主 FFI 集成测试：v2 库升级后老数据完好 | 未开始 |
-| T3 | T1 | mood 字段读写（save／list／exportAll／_toEntry） | 集成测试 | 未开始 |
-| T4 | T1 | 备份编解码 mood 字段 | 编解码单测覆盖带／不带 mood | 未开始 |
-| T5 | T3、T4 | 合并规则（mood 跟 updatedAt 走） | 集成测试 | 未开始 |
-| T6 | T1 | `EntryEditorController` 记录／清除 mood | 控制器单测 | 未开始 |
-| T7 | T3、T6 | 记录页心情入口与弹层 | 组件测试 | 未开始 |
-| T8 | T1 | 时间轴卡片显示心情 emoji | 组件测试 | 未开始 |
-| T9 | T1~T8 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 未开始 |
+| T1 | — | `Entry.mood` 与 `mood.dart` 映射表 | 域层单测 | 已完成 |
+| T2 | T1 | SQLite schema v3 与幂等迁移 | 宿主 FFI 集成测试：v2 库升级后老数据完好 | 已完成 |
+| T3 | T1 | mood 字段读写（save／list／exportAll／_toEntry） | 集成测试 | 已完成 |
+| T4 | T1 | 备份编解码 mood 字段 | 编解码单测覆盖带／不带 mood | 已完成 |
+| T5 | T3、T4 | 合并规则（mood 跟 updatedAt 走） | 集成测试 | 已完成 |
+| T6 | T1 | `EntryEditorController` 记录／清除 mood | 控制器单测 | 已完成 |
+| T7 | T3、T6 | 记录页心情入口与弹层 | 组件测试 | 已完成 |
+| T8 | T1 | 时间轴卡片显示心情 emoji | 组件测试 | 已完成 |
+| T9 | T1~T8 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 已完成 |
 
 ## 7. 测试计划
 
@@ -228,12 +228,19 @@ client/lib/src/ui/timeline_page.dart               时间轴卡片显示心情 e
 
 ## 8. 实施变化与交付
 
-- 实际实现路径：完成后填写
-- 实际检查命令：执行后填写
-- 已知限制与未完成项：如实填写
-- 测试报告与交付物：创建后链接
+- 实际实现路径：按第 6 节任务表顺序完成 T1–T9，全部在 `feat/F006-mood-checkin` 分支（从 F005 的 `0a7e1cc` 开出；F005 未合并到 main）。每个任务 TDD 实现 + 独立评审，评审发现的问题在修复波次中解决（见下表）。
+- 实际检查命令：`flutter analyze`（No issues found!）、`flutter test`（273 项全部通过）、`grep -rn "UnimplementedError" client/lib`（无占位）、`flutter build apk --debug`（`√ Built build/app/outputs/flutter-apk/app-debug.apk`）。
+- 已知限制与未完成项：
+  - 心情为可选附加信息，导入不带 mood 的较新备份会清空本地心情（LWW 语义，见 §5.4）。
+  - 不做心情统计（连续心情天数、热力图、情绪分析）、每日心情打卡、按心情筛选。
+  - 心情表情固定 5 种，不支持自定义。
+  - `EntryEditorController.setMood` 注释「心情仍要落库」与实际不符（mood 随正文落库，空正文不落库）——待后续修正注释或补测试固化口径。
+- 测试报告与交付物：[F006 测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md)（待创建）。
 
 | 日期 | 需求或方案变化 | 原因与决策来源 | 影响的验收标准 |
 |---|---|---|---|
 | 2026-10-30 | 初版：心情绑定单条记录、5 种 emoji+文字、可选不设为空、时间轴正文上方显示 emoji、稳定标记+映射表存储、备份 v2 加可选 mood 不升版本 | 用户在 F006 立项时确认 | AC-01 ~ AC-14 |
 | 2026-10-30 | mood 恢复合并采用 LWW 简单语义：备份 updatedAt 更新时 mood 跟备份走，备份不带 mood 则清空本地 mood | 字段级 LWW 的自然结果，与 deleted_at 口径一致；mood 为可选附加信息 | AC-10、AC-11 |
+| 2026-10-30 | `save()` 写 mood 从「非空才写」改为 **always-write**（null 即清除） | 评审发现「非空才写」使 mood 无法被清除（AC-07 不可达）；deleted_at 的「非空才写」有 restore() 伴生清除，mood 无等价机制，两者语义不同 | AC-07 |
+| 2026-10-30 | `_decodeEntry` 补 mood 类型校验（非字符串抛 BackupFormatException） | 评审发现 mood 是唯一未校验的字符串字段，损坏备份里 `"mood": 123` 会抛 TypeError 逃逸出 decode() | AC-10、AC-11 |
+| 2026-10-30 | `EntryEditorController` 加 `_mood`/`_savedMood`，`_dirty` 纳入 mood 比较 | 评审发现 always-write 下若控制器不携带 mood，文本编辑会静默清除心情；且 setMood 落库受 `_dirty` 门控，只改心情不改正文时不落库 | AC-03、AC-06 |

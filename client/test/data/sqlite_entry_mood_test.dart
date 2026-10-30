@@ -19,7 +19,7 @@ Future<void> deleteTempDir(Directory temp) async {
 void main() {
   setUpAll(sqfliteFfiInit);
 
-  Entry _entry(String id, String content,
+  Entry entry(String id, String content,
       {String? mood, DateTime? updated}) => Entry(
     id: id, content: content,
     createdAt: DateTime.utc(2026, 10, 30, 2, 0),
@@ -39,7 +39,7 @@ void main() {
     });
 
     // 触发 onCreate（全新库直接建 v3 结构）。
-    await repo.save(_entry('a', '正文'));
+    await repo.save(entry('a', '正文'));
     await repo.close();
 
     // _toEntry() 当前不读 mood（Task 3 才补），所以 Entry 层面的
@@ -166,7 +166,7 @@ void main() {
       await deleteTempDir(temp);
     });
 
-    await repo.save(_entry('m1', '今天很开心', mood: 'happy'));
+    await repo.save(entry('m1', '今天很开心', mood: 'happy'));
     expect((await repo.list()).single.mood, 'happy');
     expect((await repo.exportAll()).single.mood, 'happy');
   });
@@ -182,7 +182,7 @@ void main() {
       await deleteTempDir(temp);
     });
 
-    await repo.save(_entry('m2', '没有心情'));
+    await repo.save(entry('m2', '没有心情'));
     expect((await repo.list()).single.mood, isNull);
   });
 
@@ -197,10 +197,10 @@ void main() {
       await deleteTempDir(temp);
     });
 
-    await repo.save(_entry('m3', 'a', mood: 'happy'));
+    await repo.save(entry('m3', 'a', mood: 'happy'));
     // always-write 口径：编辑器总是携带当前 mood，mood=null 即清除库中
     // 已有的心情（AC-07）。不再沿用「非空才写」的旧口径。
-    await repo.save(_entry('m3', 'a 改', mood: null,
+    await repo.save(entry('m3', 'a 改', mood: null,
       updated: DateTime.utc(2026, 10, 30, 3, 0)));
     expect((await repo.list()).single.mood, isNull);
   });
@@ -216,11 +216,11 @@ void main() {
       await deleteTempDir(temp);
     });
 
-    await repo.save(_entry('m5', '今天很开心', mood: 'happy'));
+    await repo.save(entry('m5', '今天很开心', mood: 'happy'));
     expect((await repo.list()).single.mood, 'happy');
     // 清除心情：always-write 口径下 save mood=null 即写 NULL，时间轴
     // list 与 exportAll 都应读回 null。
-    await repo.save(_entry('m5', '今天很开心', mood: null,
+    await repo.save(entry('m5', '今天很开心', mood: null,
       updated: DateTime.utc(2026, 10, 30, 3, 0)));
     expect((await repo.list()).single.mood, isNull);
     expect((await repo.exportAll()).single.mood, isNull);
@@ -237,8 +237,8 @@ void main() {
       await deleteTempDir(temp);
     });
 
-    await repo.save(_entry('m4', 'a', mood: 'happy'));
-    await repo.save(_entry('m4', 'a 改', mood: 'sad',
+    await repo.save(entry('m4', 'a', mood: 'happy'));
+    await repo.save(entry('m4', 'a 改', mood: 'sad',
       updated: DateTime.utc(2026, 10, 30, 3, 0)));
     expect((await repo.list()).single.mood, 'sad');
   });
