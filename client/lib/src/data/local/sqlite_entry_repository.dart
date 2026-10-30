@@ -98,6 +98,34 @@ class SqliteEntryRepository implements LocalEntryRepository {
     return rows.map(_toEntry).toList();
   }
 
+  // TODO(F005 Task 3): 实现 SQLite 侧的软删除/恢复/彻底删除。
+  // 这里只保留占位实现，让接口先行落地时整个包仍可编译分析。
+
+  @override
+  Future<List<Entry>> listDeleted({int limit = 30}) async {
+    throw UnimplementedError('SqliteEntryRepository.listDeleted');
+  }
+
+  @override
+  Future<void> softDelete(String id) async {
+    throw UnimplementedError('SqliteEntryRepository.softDelete');
+  }
+
+  @override
+  Future<void> restore(String id) async {
+    throw UnimplementedError('SqliteEntryRepository.restore');
+  }
+
+  @override
+  Future<void> purge(String id) async {
+    throw UnimplementedError('SqliteEntryRepository.purge');
+  }
+
+  @override
+  Future<int> purgeAll() async {
+    throw UnimplementedError('SqliteEntryRepository.purgeAll');
+  }
+
   @override
   Future<ImportSummary> importAll(List<Entry> entries) async {
     final db = await _database();

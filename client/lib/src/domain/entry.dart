@@ -13,6 +13,7 @@ class Entry {
     required this.createdAt,
     required this.updatedAt,
     required this.dayKey,
+    this.deletedAt,
   });
 
   final String id;
@@ -20,6 +21,11 @@ class Entry {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String dayKey;
+
+  /// 删除时间。非空表示这条已被软删除：数据仍在库里，但不该出现在时间轴上。
+  final DateTime? deletedAt;
+
+  bool get isDeleted => deletedAt != null;
 }
 
 class EntryCursor {
