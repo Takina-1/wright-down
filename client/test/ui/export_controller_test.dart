@@ -225,7 +225,7 @@ void main() {
     final markdown = utf8.decode(gateway.savedBytes!);
     expect(markdown, isNot(contains('这条已经删掉了')));
     expect(markdown, contains('第一条'));
-    expect(markdown, contains('entryCount: 1'));
+    expect(markdown, contains('entryCount: 1\n'));
   });
 
   test('a broken entry is reported with the encoding reason', () async {

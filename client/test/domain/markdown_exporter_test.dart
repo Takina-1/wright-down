@@ -23,7 +23,7 @@ void main() {
       exportedAt: DateTime.utc(2026, 10, 29, 4),
     );
     expect(markdown, contains('# 本地日记导出'));
-    expect(markdown, contains('entryCount: 0'));
+    expect(markdown, contains('entryCount: 0\n'));
   });
 
   test('one entry shows its day and local time', () {
@@ -151,7 +151,7 @@ void main() {
 
     expect(markdown, isNot(contains('写错了')));
     expect(markdown, contains('正常记录'));
-    expect(markdown, contains('entryCount: 1'));
+    expect(markdown, contains('entryCount: 1\n'));
   });
 
   test('visibleCount 与渲染条数一致', () {
@@ -188,7 +188,7 @@ void main() {
     final markdown = const MarkdownExporter().render([deleted]);
 
     expect(markdown, isNot(contains('写错了')));
-    expect(markdown, contains('entryCount: 0'));
+    expect(markdown, contains('entryCount: 0\n'));
     expect(markdown, isNot(contains('## 2026-10-28')));
   });
 
@@ -213,6 +213,6 @@ void main() {
 
     expect(markdown, isNot(contains('## 2026-10-27')));
     expect(markdown, contains('## 2026-10-29'));
-    expect(markdown, contains('entryCount: 1'));
+    expect(markdown, contains('entryCount: 1\n'));
   });
 }
