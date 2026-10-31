@@ -2,7 +2,7 @@
 
 从 [功能模板](../templates/功能需求模板-feature-spec-template.md) 创建需求与方案，再登记到本表。流程与命名见 [开发规范](../开发流程-development-workflow.md)。
 
-下一可用编号为 `F007`。模板中的例子不代表已经立项。
+下一可用编号为 `F008`。模板中的例子不代表已经立项。
 
 | 编号 | 功能名称 | 优先级 | 状态 | 需求与方案 | 测试报告 | 阻塞项／下一步 |
 |---|---|---|---|---|---|---|
@@ -12,5 +12,6 @@
 | F004 | 导出与备份恢复 | P1 | 待验收 | [需求与方案](F004-导出与备份恢复-export-and-backup.md) · [计划](F004-导出与备份恢复计划-export-and-backup-plan.md) | [测试报告](../test-reports/F004-导出与备份恢复测试报告-export-and-backup-test-report.md) | 宿主验证通过：静态分析无问题、91 项自动化测试通过、调试 APK 构建成功；真机验收 11 类通过（SAF 保存与选择、分享面板、取消行为、损坏文件拒绝、合并恢复、幂等、离线导出），仅 1000 条量级未执行 |
 | F005 | 删除记录与回收站 | P1 | 待测试 | [需求与方案](F005-删除记录与回收站-entry-delete-and-trash.md) · [计划](F005-删除记录与回收站计划-entry-delete-and-trash-plan.md) | [测试报告](../test-reports/F005-删除记录与回收站测试报告-entry-delete-and-trash-test-report.md) | 宿主侧通过：静态分析无问题、235 项自动化测试通过、调试 APK 构建通过；代码随 F006 合并进入 main（F006 分支自 F005 开出）；**真机验收仍未执行**，需连上手机后补做 |
 | F006 | 心情打卡 | P1 | 已完成 | [需求与方案](F006-心情打卡-mood-checkin.md) · [计划](F006-心情打卡计划-mood-checkin-plan.md) | [测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md) | 真机验收（Xiaomi 2211133C / Android 15）已执行并合并到 main：AC-01~AC-03、AC-05~AC-12 通过，含 schema v2→v3 升级与幂等、备份导出与旧备份导入、小屏布局；AC-04 位置偏差（时间轴 emoji 实现在正文左侧，与「正文上方」不符）经用户 2026-10-31 接受并暂缓处置；已通过合并提交 `ea2d7b8` 合并到 `main` |
+| F007 | 连续天数 | P1 | 待验收 | [需求与方案](F007-连续天数-consecutive-days.md) | [测试报告](../test-reports/F007-连续天数测试报告-consecutive-days-test-report.md) | 宿主侧静态分析无问题、301 项测试通过、调试 APK 构建通过；Xiaomi 2211133C（Android 15）真机验收 AC-01~AC-11 全部通过。真机验收发现并修复缺陷 D-01（`current` 恒为 0，根因是 `today` 带时刻而 `dayKey` 是 naive 日历日），已补 4 项带时刻的回归测试 |
 
 状态：待明确、待开发、开发中、待测试、待验收、已完成、阻塞、已取消。新增功能后更新下一可用编号；状态只在此表维护。
