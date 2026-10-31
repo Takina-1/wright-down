@@ -5,6 +5,16 @@ import 'package:local_diary/src/ui/timeline_page.dart';
 
 import '../support/memory_repository.dart';
 
+/// 限定在时间轴 ListTile 内按正文查找。
+///
+/// F008 起回顾页顶部多了「随机一篇」卡片，它也显示某条条目的正文，
+/// 与时间轴 ListTile 撞同一文本。时间轴相关断言只关心 ListTile，
+/// 故用本 helper 收窄范围，避免撞车。
+Finder tileText(String text) => find.descendant(
+      of: find.byType(ListTile),
+      matching: find.text(text),
+    );
+
 /// 连续天数卡片的组件测试。
 ///
 /// `today` 通过 [TimelinePage.today] 注入以固定「今天」，避免午夜抖动；
@@ -95,7 +105,7 @@ void main() {
     expect(find.text('连续 3 天'), findsOneWidget);
 
     // 删除最旧一条（大前天 10-28）：连续段 3→2，不断口。
-    await tester.longPress(find.text('大前天记的'));
+    await tester.longPress(tileText('大前天记的'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();
@@ -106,6 +116,11 @@ void main() {
   });
 
   testWidgets('AC-10: 删除断口处的条目后，连续天数按昨天为界重算', (tester) async {
+    // 视口加高：页眉 + 随机一篇 + 连续天数两张卡片占掉默认 800px 视口的
+    // 大半高度，会把中间那条条目推到屏幕外，ListView.builder 不构建它。
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(900, 3000);
+    addTearDown(tester.view.reset);
     // 删除前天（10-29）后，昨天（10-30）与大前天（10-28）之间断开，
     // 昨天为界下只剩昨天这 1 天——验证断口不会让卡片留旧值 3。
     final repo = await seed([
@@ -116,7 +131,7 @@ void main() {
     await showTimeline(tester, repo);
     expect(find.text('连续 3 天'), findsOneWidget);
 
-    await tester.longPress(find.text('前天记的'));
+    await tester.longPress(tileText('前天记的'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();

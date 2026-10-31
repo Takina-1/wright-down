@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../domain/entry.dart';
 import '../domain/local_entry_repository.dart';
 import '../domain/mood.dart';
+import '../domain/random_entry.dart';
 import '../domain/streak.dart';
 
 class TimelinePage extends StatefulWidget {
@@ -15,6 +17,8 @@ class TimelinePage extends StatefulWidget {
     required this.onStart,
     this.onDelete,
     this.today,
+    this.onRandomShow,
+    this.randomSeed,
   });
   final LocalEntryRepository repository;
   final ValueChanged<Entry> onEdit;
@@ -29,6 +33,14 @@ class TimelinePage extends StatefulWidget {
   ///
   /// 仅用于让组件测试固定日期，生产调用方无需传。
   final DateTime? today;
+
+  /// 点随机一篇卡片时回调，携带抽中的条目，由调用方跳详情。
+  ///
+  /// 不传则卡片不响应点击（与连续天数卡片本期不响应点击的口径一致）。
+  final ValueChanged<Entry>? onRandomShow;
+
+  /// 随机抽取用的种子。仅用于组件测试固定结果，生产不传取系统随机源。
+  final int? randomSeed;
   @override
   State<TimelinePage> createState() => _TimelinePageState();
 }
@@ -39,6 +51,8 @@ class _TimelinePageState extends State<TimelinePage> {
   bool _loading = false;
   bool _hasMore = true;
   bool _failed = false;
+  Entry? _randomEntry;
+  int _randomSeq = -1;
   @override
   void initState() {
     super.initState();
@@ -46,6 +60,44 @@ class _TimelinePageState extends State<TimelinePage> {
       if (_scroll.position.extentAfter < 250 && !_failed) _load();
     });
     _load();
+    _pickRandom();
+  }
+
+  /// 随机抽一篇用于顶部「随便看看」卡片。
+  ///
+  /// 从全部条目里过滤掉已删除的，再抽一条；无存活条目时清空卡片。
+  /// 抽取失败（理论上不会发生，纯内存运算）不抛异常，保持卡片为空。
+  ///
+  /// 种子策略：首次生产用系统随机源、测试用固定 seed（可复现）；之后每次
+  /// 「换一篇」把种子 +1 走 Random(seed)，保证换到不同条目且测试可复现——
+  /// 避免用系统随机时「换一篇」可能抽到同一条，让组件测试断言碰运气。
+  Random _nextRandom() {
+    if (_randomSeq < 0) {
+      if (widget.randomSeed == null) return Random();
+      _randomSeq = widget.randomSeed!;
+      return Random(_randomSeq);
+    }
+    _randomSeq++;
+    return Random(_randomSeq);
+  }
+
+  Future<void> _pickRandom() async {
+    try {
+      final all = await widget.repository.exportAll();
+      // 首次（_randomSeq < 0）不排除；「换一篇」时排除当前展示的那条，
+      // 保证必然换到不同条目（AC-03）。按 ID 排除而非引用：exportAll
+      // 每次返回新实例，引用比较会失效。
+      final excludeId = _randomSeq < 0 ? null : _randomEntry?.id;
+      final picked = pickRandomEntry(
+        all,
+        random: _nextRandom(),
+        excludeId: excludeId,
+      );
+      if (!mounted) return;
+      setState(() => _randomEntry = picked);
+    } catch (_) {
+      // 读取失败不影响时间轴主流程，卡片留空即可。
+    }
   }
 
   Future<void> _load() async {
@@ -319,134 +371,192 @@ class _TimelinePageState extends State<TimelinePage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '生活的片段',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            const Text('每一件小事，都值得被记住。'),
-          ],
-        ),
-      ),
-      _streakCard(context),
-      Expanded(
-        child: _entries.isEmpty
-            ? _loading
-                  ? ListView(
-                      children: List.generate(
-                        3,
-                        (_) => Container(
-                          height: 100,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainer,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    )
-                  : Center(
-                      child: _failed
-                          ? _retry()
-                          : Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.menu_book_outlined,
-                                  size: 64,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                const Text('还没有记录'),
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: widget.onStart,
-                                  child: const Text('写下第一条'),
-                                ),
-                              ],
-                            ),
-                    )
-            : ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                itemCount: _entries.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == _entries.length) {
-                    if (_failed) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: _retry(),
-                      );
-                    }
-                    if (_hasMore) {
-                      return TextButton(
-                        onPressed: _loading ? null : _load,
-                        child: Text(_loading ? '正在读取…' : '查看更多'),
-                      );
-                    }
-                    return const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: Text('这些片段，都属于你。')),
-                    );
-                  }
-                  final entry = _entries[index];
-                  final month = _monthOf(entry);
-                  final showMonth =
-                      index == 0 || _monthOf(_entries[index - 1]) != month;
-                  final time = entry.createdAt.toLocal();
-                  final emoji = emojiOf(entry.mood);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (showMonth)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-                          child: Text(
-                            '${month.substring(0, 4)} 年 ${month.substring(5)} 月',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                      Card(
-                        elevation: 0,
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: emoji.isEmpty ? null : Text(emoji),
-                          title: Text(
-                            entry.content,
-                            maxLines: 4,
+  /// 随机一篇卡片：从存活条目里随机抽一篇展示摘要。
+  ///
+  /// 点卡片正文回调 [TimelinePage.onRandomShow] 跳详情；点「换一篇」重新抽。
+  /// 无任何存活条目时显示空状态引导，与连续天数卡片的空文案区分。
+  Widget _randomCard(BuildContext context) {
+    final picked = _randomEntry;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      child: Card(
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🎲', style: TextStyle(fontSize: 28)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '随便看看',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              picked == null
+                  ? const Text('翻开第一页，开始记录')
+                  : InkWell(
+                      key: const Key('random-card-body'),
+                      onTap: widget.onRandomShow == null
+                          ? null
+                          : () => widget.onRandomShow!(picked),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _snippet(picked.content),
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(height: 1.6),
                           ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              '${_dayKeyOf(entry)}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
-                            ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _dayKeyOf(picked),
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
-                          onTap: () => widget.onEdit(entry),
-                          onLongPress: () => _showEntryActions(entry),
-                        ),
+                        ],
                       ),
-                    ],
-                  );
-                },
-              ),
+                    ),
+              if (picked != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('random-show-another'),
+                    onPressed: _pickRandom,
+                    child: const Text('换一篇'),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
-    ],
+    );
+  }
+
+  /// 回顾页页眉：标题 + 副标题。
+  Widget _header(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '生活的片段',
+          style: Theme.of(context).textTheme.headlineMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        const Text('每一件小事，都值得被记住。'),
+      ],
+    ),
   );
+
+  @override
+  Widget build(BuildContext context) {
+    // 整页一个滚动 ListView：页眉 + 随机一篇卡片 + 连续天数卡片 + 时间轴
+    // 全部随滚动一起移动。之前页眉与两张卡片固定在 Expanded 之上，两张卡片
+    // 撑高后把时间轴第一条推到屏幕外（小屏真机上同样看不到首条），且固定
+    // 高度在测试视口里触发 RenderFlex 溢出。合并成单列表后两者都消失。
+    return ListView.builder(
+      controller: _scroll,
+      // 前 3 项是页眉与两张卡片，之后是时间轴条目或空状态。
+      itemCount: 3 + _entries.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) return _header(context);
+        if (index == 1) return _randomCard(context);
+        if (index == 2) return _streakCard(context);
+        // 前 3 项是页眉与两张卡片，条目从 index 3 开始；末尾留一项做
+        // 加载更多/空状态/结束语。故 footer 的下标是 3 + 条目数。
+        final entryIndex = index - 3;
+        if (entryIndex == _entries.length) {
+          if (_failed) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: _retry(),
+            );
+          }
+          if (_entries.isEmpty) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(24, 48, 24, 24),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.menu_book_outlined,
+                      size: 64,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('还没有记录'),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: widget.onStart,
+                      child: const Text('写下第一条'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          if (_hasMore) {
+            return TextButton(
+              onPressed: _loading ? null : _load,
+              child: Text(_loading ? '正在读取…' : '查看更多'),
+            );
+          }
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: Text('这些片段，都属于你。')),
+          );
+        }
+        final entry = _entries[entryIndex];
+        final month = _monthOf(entry);
+        final showMonth =
+            entryIndex == 0 || _monthOf(_entries[entryIndex - 1]) != month;
+        final time = entry.createdAt.toLocal();
+        final emoji = emojiOf(entry.mood);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showMonth)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                child: Text(
+                  '${month.substring(0, 4)} 年 ${month.substring(5)} 月',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            Card(
+              elevation: 0,
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(16),
+                leading: emoji.isEmpty ? null : Text(emoji),
+                title: Text(
+                  entry.content,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(height: 1.6),
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    '${_dayKeyOf(entry)}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                  ),
+                ),
+                onTap: () => widget.onEdit(entry),
+                onLongPress: () => _showEntryActions(entry),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

@@ -6,6 +6,27 @@ import 'package:local_diary/app.dart';
 
 import '../support/memory_repository.dart';
 
+/// 限定在回顾页时间轴 ListTile 内按正文查找。
+///
+/// F008 起回顾页顶部多了「随机一篇」卡片，它也显示某条条目的正文。
+/// 回顾页相关断言只关心时间轴上的 ListTile，故把查找范围收窄到
+/// ListTile——随机卡片正文在 InkWell 里、不是 ListTile，不会命中。
+Finder timelineText(String text) => find.descendant(
+      of: find.byType(ListTile),
+      matching: find.text(text),
+    );
+
+/// 把回顾页测试视口加高。
+///
+/// F008 起回顾页页眉 + 随机一篇 + 连续天数两张卡片占掉默认 800px 视口
+/// 的大半高度，时间轴条目被推到屏幕外，ListView.builder 不构建它，
+/// 点条目进编辑的 tap 也落在屏幕外打不中。把视口拉高让条目可见。
+void tallViewport(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = const Size(900, 3000);
+  addTearDown(tester.view.reset);
+}
+
 /// 恢复必定失败的仓储，用来验证「撤销失败必须给用户提示」。
 ///
 /// 只覆盖 [MemoryRepository.restore]，其余行为与生产仓储一致。
@@ -65,6 +86,7 @@ void main() {
   testWidgets('write, autosave, review and edit the same diary', (
     tester,
   ) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -75,17 +97,18 @@ void main() {
     expect(find.text('已保存'), findsOneWidget);
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    expect(find.text('今天在公园散步'), findsOneWidget);
-    await tester.tap(find.text('今天在公园散步'));
+    expect(timelineText('今天在公园散步'), findsOneWidget);
+    await tester.tap(timelineText('今天在公园散步'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('entry-content')), '今天在公园看到了猫');
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    expect(find.text('今天在公园看到了猫'), findsOneWidget);
+    expect(timelineText('今天在公园看到了猫'), findsOneWidget);
     expect(repo.entries, hasLength(1));
   });
 
   testWidgets('empty timeline offers a way to start writing', (tester) async {
+    tallViewport(tester);
     await tester.pumpWidget(JournalApp(repository: MemoryRepository()));
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
@@ -128,6 +151,7 @@ void main() {
   });
 
   testWidgets('编辑已有条目时出现删除按钮，新记录时不出现', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -141,7 +165,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     expect(find.text('删除这条'), findsOneWidget);
@@ -149,6 +173,7 @@ void main() {
   });
 
   testWidgets('确认删除后编辑器复位并可撤销', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -157,7 +182,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('composer-delete')));
@@ -192,6 +217,7 @@ void main() {
   });
 
   testWidgets('取消删除对话框时条目与编辑器内容都不变', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -200,7 +226,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('composer-delete')));
@@ -219,6 +245,7 @@ void main() {
   });
 
   testWidgets('删除确认框里的正文摘要截断到二十字', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -228,7 +255,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(long));
+    await tester.tap(timelineText(long));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('composer-delete')));
@@ -244,6 +271,7 @@ void main() {
   });
 
   testWidgets('删除失败时提示且条目仍在编辑器里', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository()..failDelete = true;
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -252,7 +280,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('composer-delete')));
@@ -273,6 +301,7 @@ void main() {
   });
 
   testWidgets('删除进行中禁用删除与下一条按钮且输入框只读', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -281,7 +310,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     // 把软删除挂起：删除流程停在半路，界面应进入过渡态。
@@ -315,6 +344,7 @@ void main() {
   });
 
   testWidgets('撤销恢复失败时提示用户到回收站重试', (tester) async {
+    tallViewport(tester);
     final repo = _FailingRestoreRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -323,7 +353,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('composer-delete')));
@@ -342,6 +372,7 @@ void main() {
   });
 
   testWidgets('回顾页删除了正在编辑的条目时记录页复位并提示', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -355,7 +386,7 @@ void main() {
     // 切到回顾页，长按同一条记录并删除。
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('第一条记录'));
+    await tester.longPress(timelineText('第一条记录'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();
@@ -379,6 +410,7 @@ void main() {
   });
 
   testWidgets('删除前保存失败时优先提示保存失败原因', (tester) async {
+    tallViewport(tester);
     final repo = MemoryRepository();
     await tester.pumpWidget(JournalApp(repository: repo));
     await tester.pumpAndSettle();
@@ -387,7 +419,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('第一条记录'));
+    await tester.tap(timelineText('第一条记录'));
     await tester.pumpAndSettle();
 
     // 改了正文又存不下去：删除会先落盘，落盘失败后删除也应被拦下，
