@@ -144,7 +144,7 @@ client/test/domain/streak_test.dart                新增：纯函数单测覆�
 | T1 | — | `domain/streak.dart` 纯函数 | 域层单测（空集/单条/当天已记未记/断开/跨月跨年跨闰年） | 已完成 |
 | T2 | T1 | 回顾页顶部连续天数卡片 | 组件测试（有数据/今天未记/今天已记/空数据/删除后更新） | 已完成 |
 | T3 | T1、T2 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 已完成 |
-| T4 | T3 | 真机验收并更新报告与台账 | 按第 7 节执行 | 待执行（需设备连接） |
+| T4 | T3 | 真机验收并更新报告与台账 | 按第 7 节执行 | 已完成（Xiaomi 2211133C / Android 15；AC-01~AC-11 全部通过；发现并修复缺陷 D-01） |
 
 ## 7. 测试计划
 
@@ -158,11 +158,13 @@ client/test/domain/streak_test.dart                新增：纯函数单测覆�
 | AC-11 | 静态分析、全量测试、构建 | 构建检查 | 宿主 flutter |
 
 真机验收在 T4 进行：在真机回顾页确认卡片显示、今天未记的提示、删除一条后数字变化。
+第 2 轮真机验收（2026-10-31，Xiaomi 2211133C / Android 15）用 adb 驱动，覆盖跨日、跨月、跨年、跨闰日与空状态；跨日场景通过 `adb shell cmd alarm set-time` 调整设备日期构造。
+真机验收暴露出宿主单测未覆盖的缺陷 D-01（`current` 在生产环境恒为 0，根因是 `today` 带时刻而 `dayKey` 是 naive 日历日），已在 `streak.dart` 修复并补 4 项带时刻的回归测试。
 
 ## 8. 实施变化与交付
 
-- 实际实现路径：按第 6 节任务表顺序完成 T1–T3，全部在 `feat/F007-consecutive-days` 分支（从 main 的 `7df764d` 开出）。T1 纯函数 + 域层单测；T2 回顾页顶部卡片（`today` 做成可注入参数，生产默认 `DateTime.now()`，组件测试固定日期）；T3 全量检查与构建。
-- 实际检查命令：
+- 实际实现路径：按第 6 节任务表顺序完成 T1–T4，全部在 `feat/F007-consecutive-days` 分支（从 main 的 `7df764d` 开出）。T1 纯函数 + 域层单测；T2 回顾页顶部卡片（`today` 做成可注入参数，生产默认 `DateTime.now()`，组件测试固定日期）；T3 全量检查与构建；T4 真机验收（Xiaomi 2211133C / Android 15，adb 驱动），验收中发现并修复缺陷 D-01。
+- 实际检查命令（第 1 轮，宿主侧）：
   ```bash
   cd client
   flutter analyze                      # No issues found!
@@ -170,21 +172,30 @@ client/test/domain/streak_test.dart                新增：纯函数单测覆�
   grep -rn "UnimplementedError" lib    # 无占位实现
   flutter build apk --debug            # √ Built build/app/outputs/flutter-apk/app-debug.apk（159,530,676 字节，2026-10-31 18:27）
   ```
+- 实际检查命令（第 2 轮，缺陷 D-01 修复后）：
+  ```bash
+  cd client
+  flutter analyze                      # No issues found!
+  flutter test                         # 301 项全部通过（新增 4 项带时刻的回归测试）
+  flutter build apk --debug            # √ Built build/app/outputs/flutter-apk/app-debug.apk（182,663,985 字节，2026-10-31 23:53）
+  ```
 - 实现细节与偏差：
   - 计数口径最终统一为**单一「昨天为界」**：`StreakSummary.current` 恒为截止昨天的连续天数，`hasEntryToday` 是独立布尔；UI 用 `display = current + (hasEntryToday ? 1 : 0)` 展示「含今天的连续天数」，避免 `current` 随午夜跳号，也消除了方案 §5.2 示例里 `current` 与 `display` 可能不一致的二义。
   - `StreakSummary` 加了 `display` getter，把「已记今天并入展示」的逻辑收敛在一处，页面不各自加减。
   - 卡片空状态文案用「等待你的第一篇日记」/「开启你的第一条记录」，与时间轴自身的空状态「还没有记录」区分，避免组件测试文案撞车。
   - AC-10 拆成两条组件测试：删最旧一条（连续段 3→2 不断口）验证「减少」；删断口处一条（昨天与更早断开）验证「昨天为界下只剩 1 天，不留旧值」。
   - 跨月/跨年/跨闰日由域层单测用固定 `today` 精确覆盖（AC-06~AC-08）；组件测试用 `today` 注入固定日期，避免午夜抖动。
+  - **日期运算改为全程 naive 日历日**（D-01 修复）：`computeStreak` 入口用 `_dayOf()` 把「今天」截断到当日 00:00，退日用 `_shiftDays()` 走 `DateTime` 构造器的日期溢出规则（月末/跨年/闰日），不再用 `Duration(days: 1)`。原因见测试报告缺陷 D-01。
   - `flutter build apk` 期间一度报 6 个「程序包不存在」（filepicker/sqflite/jni 等插件），根因是 `flutter clean` 删掉了插件清单 `.flutter-plugins-dependencies`、而 `--no-pub` 未重新生成，与代码无关；`flutter pub get` 补回清单后构建成功。此为环境问题，非实现缺陷。
+  - 真机安装：设备上原为 F006 时期的调试包，签名与本次构建不匹配（`INSTALL_FAILED_UPDATE_INCOMPATIBLE`）。用 `.local/android-user/debug.keystore` 对新 APK 重签名后 `adb install -r` 覆盖安装，可保留设备原有数据。
 - 已知限制与未完成项：
   - 本次只算「当前连续」（截止昨天），不算历史最长连续（`longest`）。
   - 卡片本期不响应点击（见 §2 未决定项）。
   - 不做热力图、月度回顾、奖牌、推送通知。
-  - 真机验收（T4）待设备连接后执行。
-- 测试报告与交付物：[F007 连续天数测试报告](../test-reports/F007-连续天数测试报告-consecutive-days-test-report.md)（待建）
+- 测试报告与交付物：[F007 连续天数测试报告](../test-reports/F007-连续天数测试报告-consecutive-days-test-report.md)
 
 | 日期 | 需求或方案变化 | 原因与决策来源 | 影响的验收标准 |
 |---|---|---|---|
 | 2026-10-31 | 初版：纯本地连续天数计算，回顾页顶部卡片，「昨天为界」计数口径 | 用户在 F007 立项时确认方向与口径 | AC-01 ~ AC-11 |
 | 2026-10-31 | 展示口径统一为单一「昨天为界」：`current` 恒为截止昨天、`display` 单独并入今天；避免午夜跳号与 `current`/`display` 二义 | 实现时发现原示例 `current` 与展示值可能不一致 | AC-01、AC-02、AC-03 |
+| 2026-10-31 | 日期运算改为全程 naive 日历日（`_dayOf()` 截断时刻、`_shiftDays()` 走日期溢出规则），不再用 `Duration(days: 1)` | 真机验收发现 `current` 恒为 0：宿主单测的 `today` 全为午夜值，掩盖了「带时刻的今天」与「naive dayKey」不相等的问题 | AC-01、AC-05 ~ AC-10 |

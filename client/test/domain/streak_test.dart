@@ -128,4 +128,44 @@ void main() {
     expect(s.current, 0);
     expect(s.hasEntryToday, isFalse);
   });
+
+  // 回归：真机 today 来自 DateTime.now()，带时刻（不是午夜）。
+  // 计数必须只看日历日，不能被时刻影响。
+  test('回归: today 带时刻时连续天数只按日历日算', () {
+    final s = computeStreak(
+      ['2026-10-31'],
+      today: DateTime(2026, 11, 1, 23, 51),
+    );
+    expect(s.current, 1);
+    expect(s.hasEntryToday, isFalse);
+    expect(s.display, 1);
+  });
+
+  test('回归: today 带时刻时今天已记也算 1 天', () {
+    final s = computeStreak(
+      ['2026-11-01'],
+      today: DateTime(2026, 11, 1, 1, 44),
+    );
+    expect(s.current, 0);
+    expect(s.hasEntryToday, isTrue);
+    expect(s.display, 1);
+  });
+
+  test('回归: today 带时刻时连续多天不受影响', () {
+    final s = computeStreak(
+      ['2026-10-31', '2026-10-30', '2026-10-29'],
+      today: DateTime(2026, 11, 1, 13, 5),
+    );
+    expect(s.current, 3);
+    expect(s.hasEntryToday, isFalse);
+    expect(s.display, 3);
+  });
+
+  test('回归: today 带时刻时断口仍只算到断口为止', () {
+    final s = computeStreak(
+      ['2026-10-31', '2026-10-29'],
+      today: DateTime(2026, 11, 1, 8, 30),
+    );
+    expect(s.current, 1);
+  });
 }
