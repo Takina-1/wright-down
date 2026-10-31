@@ -15,7 +15,7 @@ class Entry {
     required this.dayKey,
     this.deletedAt,
     this.mood,              // 可选；稳定标记字符串，非 emoji
-    this.tags,              // 可选；已规范化（trim、去空、去重、保序）
+    this.tags = const [],   // 可选；已规范化（trim、去空、去重、保序），默认空列表
   });
 
   final String id;

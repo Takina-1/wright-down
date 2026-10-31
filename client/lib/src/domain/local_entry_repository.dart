@@ -5,7 +5,10 @@ abstract interface class LocalEntryRepository {
   Future<void> save(Entry entry);
 
   /// 时间轴列表：只含未删除条目，按创建时间倒序。
-  Future<List<Entry>> list({EntryCursor? before, int limit = 30});
+  ///
+  /// [tag] 传入时只返回带该标签的条目（标签匹配按 JSON 数组里的引号子串，
+  /// 大小写敏感，与 [normalizeTags] 一致）。
+  Future<List<Entry>> list({EntryCursor? before, String? tag, int limit = 30});
 
   /// 导出用：一次取出全部条目（含已删除条目），按创建时间倒序排列，不受分页限制。
   /// 含已删除条目是为了让备份携带删除标记，恢复时不会把已删条目复活。

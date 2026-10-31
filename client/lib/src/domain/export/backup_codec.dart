@@ -116,6 +116,10 @@ class BackupCodec {
     if (mood != null) {
       map['mood'] = mood;
     }
+    // tags 只有非空时才写键：未设标签的条目不写，v2 旧备份因此仍可被解码。
+    if (entry.tags.isNotEmpty) {
+      map['tags'] = entry.tags;
+    }
     return map;
   }
 
@@ -141,6 +145,21 @@ class BackupCodec {
     if (rawMood != null && rawMood is! String) {
       throw const BackupFormatException(damagedReason);
     }
+    // tags 是可选字段：缺失（v2 旧备份）合法，视为空列表；存在但非字符串
+    // 列表说明备份已损坏。每个元素必须是字符串，非字符串抛损坏。
+    final rawTags = raw['tags'];
+    final tags = <String>[];
+    if (rawTags != null) {
+      if (rawTags is! List) {
+        throw const BackupFormatException(damagedReason);
+      }
+      for (final item in rawTags) {
+        if (item is! String) {
+          throw const BackupFormatException(damagedReason);
+        }
+        tags.add(item);
+      }
+    }
     return Entry(
       id: id,
       content: content,
@@ -149,6 +168,7 @@ class BackupCodec {
       dayKey: dayKey,
       deletedAt: rawDeletedAt == null ? null : _parseDate(rawDeletedAt),
       mood: rawMood as String?,
+      tags: tags,
     );
   }
 
