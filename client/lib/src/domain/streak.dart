@@ -22,11 +22,6 @@ class StreakSummary {
   int get display => current + (hasEntryToday ? 1 : 0);
 }
 
-/// 一天的毫秒数。用固定常量而非 `Duration.days(1)` 做差值判定：
-/// 相邻日历日的 epoch 毫秒差恒为 24 小时整，整除即得「差几天」，
-/// 不受局部时区 DST（某日历日可能 23/25 小时）影响。
-const int _msPerDay = 24 * 60 * 60 * 1000;
-
 /// 把 `YYYY-MM-DD` 解析成 naive 本地日期。
 ///
 /// [isValidDayKey] 已保证各字段在合法范围（含闰日），
