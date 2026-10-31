@@ -70,7 +70,8 @@ void main() {
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 640);
+    // F009 起记录页多了一行标签输入，视口略加高避免 RenderFlex 溢出。
+    tester.view.physicalSize = const Size(360, 700);
     tester.view.viewInsets = const FakeViewPadding(bottom: 300);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(

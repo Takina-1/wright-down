@@ -52,6 +52,19 @@ class _TimelinePageState extends State<TimelinePage> {
   bool _hasMore = true;
   bool _failed = false;
   Entry? _randomEntry;
+  String? _activeTag;
+
+  /// 当前已加载条目里出现过的标签（保序去重），供筛选栏使用。
+  List<String> get _availableTags {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final e in _entries) {
+      for (final t in e.tags) {
+        if (seen.add(t)) result.add(t);
+      }
+    }
+    return result;
+  }
   int _randomSeq = -1;
   @override
   void initState() {
@@ -100,6 +113,49 @@ class _TimelinePageState extends State<TimelinePage> {
     }
   }
 
+  /// 按标签筛选：清空已加载条目并重新从第一页加载带该标签的条目。
+  ///
+  /// 标签来自已加载条目的 tags，故切换标签必须重置 [_entries] 与游标，
+  /// 否则会把上一个标签的结果混进来。
+  Future<void> _filterByTag(String tag) async {
+    if (tag == _activeTag) return;
+    if (_loading) return;
+    setState(() {
+      _entries.clear();
+      _activeTag = tag;
+      _hasMore = true;
+      _failed = false;
+      _loading = true;
+    });
+    await _loadPage();
+  }
+
+  /// 清除筛选，回到全部条目。
+  Future<void> _clearTagFilter() => _filterByTag('');
+
+  /// 加载一页（不判 _loading/_hasMore，由调用方控制）。
+  Future<void> _loadPage() async {
+    try {
+      final page = await widget.repository.list(
+        before: null,
+        tag: _activeTag != null && _activeTag!.isNotEmpty ? _activeTag : null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _entries.addAll(page);
+        _hasMore = page.length == 30;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _loading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _load() async {
     if (_loading || !_hasMore) return;
     setState(() {
@@ -110,6 +166,7 @@ class _TimelinePageState extends State<TimelinePage> {
       final last = _entries.lastOrNull;
       final page = await widget.repository.list(
         before: last == null ? null : EntryCursor(last.createdAt, last.id),
+        tag: _activeTag,
       );
       if (!mounted) return;
       setState(() {
@@ -457,23 +514,70 @@ class _TimelinePageState extends State<TimelinePage> {
     ),
   );
 
+  /// 标签筛选栏：列出已加载条目里出现过的标签，点某标签筛选，点「全部」清除。
+  ///
+  /// 只有已加载条目里出现过的标签才会显示在筛选栏（分页加载的旧条目标签
+  /// 不会进入筛选栏，本期可接受）。筛选时时间轴只显示带该标签的未删除条目。
+  Widget _tagFilterBar(BuildContext context) {
+    final tags = _availableTags;
+    if (tags.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          _filterChip('全部', _activeTag == null, () => _clearTagFilter()),
+          for (final tag in tags)
+            _filterChip(
+              tag,
+              _activeTag == tag,
+              () => _filterByTag(tag),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, bool selected, VoidCallback onTap) {
+    return ActionChip(
+      label: Text(label),
+      labelStyle: TextStyle(
+        color: selected
+            ? Theme.of(context).colorScheme.onPrimary
+            : Theme.of(context).colorScheme.onSurface,
+      ),
+      backgroundColor: selected
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.surfaceContainerLowest,
+      onPressed: onTap,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 整页一个滚动 ListView：页眉 + 随机一篇卡片 + 连续天数卡片 + 时间轴
-    // 全部随滚动一起移动。之前页眉与两张卡片固定在 Expanded 之上，两张卡片
-    // 撑高后把时间轴第一条推到屏幕外（小屏真机上同样看不到首条），且固定
-    // 高度在测试视口里触发 RenderFlex 溢出。合并成单列表后两者都消失。
+    // 整页一个滚动 ListView：页眉 + 标签筛选栏 + 随机一篇卡片 + 连续天数
+    // 卡片 + 时间轴全部随滚动一起移动。之前页眉与两张卡片固定在 Expanded
+    // 之上，两张卡片撑高后把时间轴第一条推到屏幕外（小屏真机上同样看不到
+    // 首条），且固定高度在测试视口里触发 RenderFlex 溢出。合并成单列表后
+    // 两者都消失。筛选栏只有带标签时才出现，故 itemCount 动态计算。
+    final hasFilterBar = _availableTags.isNotEmpty;
+    final fixedCount = 3 + (hasFilterBar ? 1 : 0);
     return ListView.builder(
       controller: _scroll,
-      // 前 3 项是页眉与两张卡片，之后是时间轴条目或空状态。
-      itemCount: 3 + _entries.length + 1,
+      // 前 fixedCount 项是页眉、筛选栏（如有）与两张卡片，之后是时间轴条目
+      // 或空状态。
+      itemCount: fixedCount + _entries.length + 1,
       itemBuilder: (context, index) {
         if (index == 0) return _header(context);
-        if (index == 1) return _randomCard(context);
-        if (index == 2) return _streakCard(context);
-        // 前 3 项是页眉与两张卡片，条目从 index 3 开始；末尾留一项做
-        // 加载更多/空状态/结束语。故 footer 的下标是 3 + 条目数。
-        final entryIndex = index - 3;
+        if (hasFilterBar && index == 1) return _tagFilterBar(context);
+        // 有筛选栏时卡片从 index 2 开始，否则从 index 1 开始。
+        final cardOffset = hasFilterBar ? 2 : 1;
+        if (index == cardOffset) return _randomCard(context);
+        if (index == cardOffset + 1) return _streakCard(context);
+        // 条目从 cardOffset + 2 开始；末尾留一项做加载更多/空状态/结束语。
+        final entryStart = cardOffset + 2;
+        final entryIndex = index - entryStart;
         if (entryIndex == _entries.length) {
           if (_failed) {
             return Padding(
@@ -546,8 +650,42 @@ class _TimelinePageState extends State<TimelinePage> {
                 ),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    '${_dayKeyOf(entry)}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_dayKeyOf(entry)}  ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                      ),
+                      if (entry.tags.isNotEmpty)
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 2,
+                          children: [
+                            for (final tag in entry.tags)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  tag,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                    ],
                   ),
                 ),
                 onTap: () => widget.onEdit(entry),

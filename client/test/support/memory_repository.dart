@@ -68,6 +68,8 @@ class MemoryRepository implements LocalEntryRepository {
       dayKey: existing.dayKey,
       deletedAt: entry.deletedAt ?? existing.deletedAt,
       mood: entry.mood,
+      // tags 同样 always-write：与 mood 同口径，传入的列表即写入（空列表即清除）。
+      tags: entry.tags,
     );
   }
 

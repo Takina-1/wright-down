@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../domain/entry.dart';
 import '../domain/local_entry_repository.dart';
+import '../domain/tags.dart';
 
 enum SaveStatus { empty, editing, saving, saved, error }
 
@@ -19,6 +20,7 @@ class EntryEditorController extends ChangeNotifier {
   String _content = '';
   String _savedContent = '';
   String? _savedMood;
+  List<String> _savedTags = const [];
   String? _id;
   DateTime? _createdAt;
   String? _dayKey;
@@ -31,9 +33,11 @@ class EntryEditorController extends ChangeNotifier {
   String? _error;
   String? _deleteError;
   String? _mood;
+  List<String> _tags = const [];
 
   String get content => _content;
   String? get mood => _mood;
+  List<String> get tags => _tags;
   SaveStatus get status => _status;
   String? get error => _error;
 
@@ -42,7 +46,9 @@ class EntryEditorController extends ChangeNotifier {
   String? get deleteError => _deleteError;
   bool get _dirty =>
       _persisted
-          ? _content != _savedContent || _mood != _savedMood
+          ? _content != _savedContent ||
+              _mood != _savedMood ||
+              _tags != _savedTags
           : _content.trim().isNotEmpty;
   bool get hasPendingChanges => _writing || _dirty;
 
@@ -77,6 +83,18 @@ class EntryEditorController extends ChangeNotifier {
 
   void clearMood() => setMood(null);
 
+  /// 设置标签列表。传入前先经 [normalizeTags] 规范化（trim、去空、去重）。
+  ///
+  /// 与 setMood 同口径：变化触发 flush；空正文时保存跳过，标签随正文一起落库。
+  void setTags(List<String> tags) {
+    final normalized = normalizeTags(tags);
+    if (_disposed || normalized == _tags) return;
+    _tags = normalized;
+    _timer?.cancel();
+    _timer = Timer(const Duration(seconds: 1), () => unawaited(flush()));
+    _notify();
+  }
+
   Future<bool> flush() {
     _timer?.cancel();
     if (_disposed) return Future.value(false);
@@ -108,6 +126,7 @@ class EntryEditorController extends ChangeNotifier {
         updatedAt: timestamp,
         dayKey: _dayKey!,
         mood: _mood,
+        tags: _tags,
       );
       _status = SaveStatus.saving;
       _error = null;
@@ -118,6 +137,7 @@ class EntryEditorController extends ChangeNotifier {
         _persisted = true;
         _savedContent = snapshot.content;
         _savedMood = snapshot.mood;
+        _savedTags = snapshot.tags;
       } catch (_) {
         _timer?.cancel();
         _status = SaveStatus.error;
@@ -139,9 +159,11 @@ class EntryEditorController extends ChangeNotifier {
     if (!await flush() || _disposed) return false;
     _content = _savedContent = '';
     _savedMood = null;
+    _savedTags = const [];
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
+    _tags = const [];
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -157,6 +179,7 @@ class EntryEditorController extends ChangeNotifier {
     _createdAt = entry.createdAt;
     _dayKey = entry.dayKey;
     _mood = _savedMood = entry.mood;
+    _tags = _savedTags = entry.tags;
     _persisted = true;
     _error = null;
     _deleteError = null;
@@ -206,9 +229,11 @@ class EntryEditorController extends ChangeNotifier {
     _timer?.cancel();
     _content = _savedContent = '';
     _savedMood = null;
+    _savedTags = const [];
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
+    _tags = const [];
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -227,9 +252,11 @@ class EntryEditorController extends ChangeNotifier {
     _timer?.cancel();
     _content = _savedContent = '';
     _savedMood = null;
+    _savedTags = const [];
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
+    _tags = const [];
     _persisted = false;
     _error = null;
     _deleteError = null;
