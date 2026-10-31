@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../domain/entry.dart';
 import '../domain/local_entry_repository.dart';
 import '../domain/mood.dart';
+import '../domain/streak.dart';
 
 class TimelinePage extends StatefulWidget {
   const TimelinePage({
@@ -13,6 +14,7 @@ class TimelinePage extends StatefulWidget {
     required this.onEdit,
     required this.onStart,
     this.onDelete,
+    this.today,
   });
   final LocalEntryRepository repository;
   final ValueChanged<Entry> onEdit;
@@ -22,6 +24,11 @@ class TimelinePage extends StatefulWidget {
   ///
   /// 不传就是 null，保持现有调用方兼容。
   final ValueChanged<Entry>? onDelete;
+
+  /// 连续天数的「今天」基准。不传取当前本地日期。
+  ///
+  /// 仅用于让组件测试固定日期，生产调用方无需传。
+  final DateTime? today;
   @override
   State<TimelinePage> createState() => _TimelinePageState();
 }
@@ -254,6 +261,64 @@ class _TimelinePageState extends State<TimelinePage> {
     return '$year-$month-$day';
   }
 
+  /// 连续天数卡片：显示截止昨天的连续天数。
+  ///
+  /// 口径为「昨天为界」（见 [computeStreak]）：今天还没写时数字不含今天，
+  /// 午夜后不跳号。今天已记时追加「今天已记」一句；今天未记给「去写一条」
+  /// 行动按钮，跳到记录页。无任何记录时显示空状态引导。
+  Widget _streakCard(BuildContext context) {
+    final dayKeys = _entries.map((e) => _dayKeyOf(e)).toList();
+    final streak = computeStreak(dayKeys, today: widget.today);
+    final hasAny = dayKeys.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      child: Card(
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('🔥', style: TextStyle(fontSize: 28)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      hasAny ? '连续 ${streak.display} 天' : '等待你的第一篇日记',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (!hasAny)
+                const Text('开启你的第一条记录')
+              else if (!streak.hasEntryToday)
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('今天还没记，去写一条',
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ),
+                    TextButton(
+                      key: const Key('streak-write-today'),
+                      onPressed: widget.onStart,
+                      child: const Text('写一条'),
+                    ),
+                  ],
+                )
+              else
+                const Text('今天已记，继续保持',
+                    style: TextStyle(color: Colors.green, fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,6 +338,7 @@ class _TimelinePageState extends State<TimelinePage> {
           ],
         ),
       ),
+      _streakCard(context),
       Expanded(
         child: _entries.isEmpty
             ? _loading
