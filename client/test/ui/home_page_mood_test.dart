@@ -5,6 +5,17 @@ import 'package:local_diary/src/ui/home_page.dart';
 
 import '../support/memory_repository.dart';
 
+/// 把回顾页测试视口加高。
+///
+/// F008 起回顾页页眉 + 随机一篇 + 连续天数两张卡片占掉默认 800px 视口
+/// 的大半高度，时间轴条目被推到屏幕外，点条目进编辑的 tap 落在屏幕外
+/// 打不中。把视口拉高让条目可见。
+void _tallViewport(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = const Size(900, 3000);
+  addTearDown(tester.view.reset);
+}
+
 Future<void> _pumpHome(WidgetTester tester, MemoryRepository repo) async {
   await tester.pumpWidget(
     MaterialApp(home: HomePage(repository: repo)),
@@ -61,6 +72,7 @@ void main() {
   });
 
   testWidgets('AC-06: 编辑已设心情的条目，弹层显示当前心情为已选', (tester) async {
+    _tallViewport(tester);
     final repo = MemoryRepository();
     // Pre-populate with an entry that has mood='happy'
     repo.entries['e1'] = Entry(
@@ -75,8 +87,15 @@ void main() {
     // Switch to review tab
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
-    // Click on the entry in the timeline to trigger edit
-    await tester.tap(find.text('今天很开心'));
+    // Click on the entry in the timeline to trigger edit。
+    // 限定到 ListTile：F008 起顶部随机一篇卡片也显示该条目正文，全局
+    // find.text 会同时命中卡片与时间轴两条。
+    await tester.tap(
+      find.descendant(
+        of: find.byType(ListTile),
+        matching: find.text('今天很开心'),
+      ),
+    );
     await tester.pumpAndSettle();
     // Now we should be back on the composer tab with the entry loaded
     // Open the mood sheet

@@ -219,11 +219,19 @@ void main() {
     expect(repo.entries['restored'], isNotNull);
 
     // 返回上一级，再切到「回顾」，恢复的条目要读得到。
+    // 限定到 ListTile：F008 起顶部随机一篇卡片也显示该条目正文，
+    // 全局 find.text 会同时命中卡片与时间轴两条。
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tab-review')));
     await tester.pumpAndSettle();
 
-    expect(find.text('从备份恢复出来的一条'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ListTile),
+        matching: find.text('从备份恢复出来的一条'),
+      ),
+      findsOneWidget,
+    );
   });
 }

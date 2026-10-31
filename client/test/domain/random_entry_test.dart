@@ -51,7 +51,7 @@ void main() {
     final picked = pickRandomEntry(list, random: Random(0));
     expect(picked, isNotNull);
     expect(picked!.isDeleted, isFalse);
-    expect(['a', 'c'], contains(picked!.id));
+    expect(['a', 'c'], contains(picked.id));
   });
 
   test('多条时抽到的一定是集合内元素', () {

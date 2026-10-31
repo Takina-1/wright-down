@@ -5,6 +5,16 @@ import 'package:local_diary/src/ui/timeline_page.dart';
 
 import '../support/memory_repository.dart';
 
+/// 限定在时间轴 ListTile 内按正文查找。
+///
+/// F008 起回顾页顶部多了「随机一篇」卡片，它也显示某条条目的正文，
+/// 与时间轴 ListTile 撞同一文本（两者都走 `_snippet` 截断）。时间轴
+/// 相关断言只关心 ListTile，故用本 helper 收窄范围，避免撞车。
+Finder tileText(String text) => find.descendant(
+      of: find.byType(ListTile),
+      matching: find.text(text),
+    );
+
 /// 恢复必定失败的仓储，用来验证「撤销失败必须给用户提示」。
 ///
 /// 只覆盖 [MemoryRepository.restore]，其余行为与生产仓储一致。
@@ -40,7 +50,7 @@ void main() {
 
     // 页面能打开，条目本身仍然读得到。
     expect(tester.takeException(), isNull);
-    expect(find.text('一条 dayKey 不合法的旧记录'), findsOneWidget);
+    expect(tileText('一条 dayKey 不合法的旧记录'), findsOneWidget);
     // 月份标题退回用创建时间的本地年月，不抛 RangeError。
     expect(find.textContaining('月'), findsWidgets);
   });
@@ -85,7 +95,7 @@ void main() {
 
   /// 长按条目 → 底部菜单点删除 → 确认对话框点确认。
   Future<void> deleteEntry(WidgetTester tester, String title) async {
-    await tester.longPress(find.text(title));
+    await tester.longPress(tileText(title));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();
@@ -97,7 +107,7 @@ void main() {
     final repo = await seed();
     await showTimeline(tester, repo);
 
-    await tester.longPress(find.text('第一条记录'));
+    await tester.longPress(tileText('第一条记录'));
     await tester.pumpAndSettle();
 
     expect(find.text('编辑'), findsOneWidget);
@@ -108,7 +118,7 @@ void main() {
     final repo = await seed();
     await showTimeline(tester, repo);
 
-    await tester.longPress(find.text('第一条记录'));
+    await tester.longPress(tileText('第一条记录'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();
@@ -134,7 +144,7 @@ void main() {
     await tester.tap(find.byKey(const Key('timeline-delete-confirm')));
     await tester.pumpAndSettle();
 
-    expect(find.text('第一条记录'), findsNothing);
+    expect(tileText('第一条记录'), findsNothing);
     expect(find.text('已移到回收站'), findsOneWidget);
     expect(find.text('撤销'), findsOneWidget);
     expect(repo.entries['a']!.deletedAt, isNotNull);
@@ -149,7 +159,7 @@ void main() {
     await tester.tap(find.text('撤销'));
     await tester.pumpAndSettle();
 
-    expect(find.text('第一条记录'), findsOneWidget);
+    expect(tileText('第一条记录'), findsOneWidget);
     expect(repo.entries['a']!.deletedAt, isNull);
   });
 
@@ -160,7 +170,7 @@ void main() {
 
     await deleteEntry(tester, '第一条记录');
 
-    expect(find.text('第一条记录'), findsOneWidget);
+    expect(tileText('第一条记录'), findsOneWidget);
     expect(find.textContaining('删除失败'), findsOneWidget);
   });
 
@@ -180,14 +190,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('第一条记录'));
+    await tester.longPress(tileText('第一条记录'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-edit')));
     await tester.pumpAndSettle();
 
     expect(edited?.id, 'a');
     // 编辑只是回调，不会删除条目。
-    expect(find.text('第一条记录'), findsOneWidget);
+    expect(tileText('第一条记录'), findsOneWidget);
     expect(repo.entries['a']!.deletedAt, isNull);
   });
 
@@ -195,7 +205,7 @@ void main() {
     final repo = await seed();
     await showTimeline(tester, repo);
 
-    await tester.longPress(find.text('第一条记录'));
+    await tester.longPress(tileText('第一条记录'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('timeline-action-delete')));
     await tester.pumpAndSettle();
@@ -210,7 +220,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // 条目还在列表里，仓库里也没有打上删除标记。
-    expect(find.text('第一条记录'), findsOneWidget);
+    expect(tileText('第一条记录'), findsOneWidget);
     expect(repo.entries['a']!.deletedAt, isNull);
     // 取消不弹「已移到回收站」的提示。
     expect(find.text('已移到回收站'), findsNothing);
@@ -218,6 +228,12 @@ void main() {
   });
 
   testWidgets('撤销后条目回到原来的排序位置', (tester) async {
+    // 视口加高：页眉 + 随机一篇 + 连续天数两张卡片占掉默认 800px 视口的
+    // 大半高度，会把靠后的条目推到屏幕外，ListView.builder 不构建它，
+    // 断言就只看到靠前的条目。
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(900, 3000);
+    addTearDown(tester.view.reset);
     final repo = MemoryRepository();
     // 三条记录，创建时间依次递减：第三条最新、第二条居中、第一条最旧。
     // 时间轴按「创建时间倒序」显示，列表顺序应是 [第三条, 第二条, 第一条]。
@@ -376,7 +392,7 @@ void main() {
     // 恢复失败必须让用户看见，不能只 debugPrint。
     expect(find.text('恢复失败，请到回收站重试'), findsOneWidget);
     // 恢复失败时条目不放回列表。
-    expect(find.text('第一条记录'), findsNothing);
+    expect(tileText('第一条记录'), findsNothing);
   });
 
   testWidgets('删除成功后回调 onDelete 告诉调用方是哪一条', (tester) async {
@@ -462,7 +478,7 @@ void main() {
     // 切走页面，TimelinePage 的 State 被卸载。
     visible.value = false;
     await tester.pumpAndSettle();
-    expect(find.text('第一条记录'), findsNothing);
+    expect(tileText('第一条记录'), findsNothing);
 
     // SnackBar 还在，撤销依然可用，而且不能碰到已卸载的 State。
     expect(find.text('撤销'), findsOneWidget);
