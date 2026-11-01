@@ -68,16 +68,21 @@ class MemoryRepository implements LocalEntryRepository {
       dayKey: existing.dayKey,
       deletedAt: entry.deletedAt ?? existing.deletedAt,
       mood: entry.mood,
+      // tags 同样 always-write：与 mood 同口径，传入的列表即写入（空列表即清除）。
+      tags: entry.tags,
     );
   }
 
   @override
-  Future<List<Entry>> list({EntryCursor? before, int limit = 30}) async {
+  Future<List<Entry>> list({EntryCursor? before, String? tag, int limit = 30}) async {
     if (limit < 1) throw ArgumentError.value(limit, 'limit');
     if (failList) throw StateError('simulated read failure');
     return _sortedByCreated()
         .where((e) {
           if (e.deletedAt != null) return false;
+          // 标签筛选口径与生产实现一致：大小写敏感、精确匹配数组里的整项，
+          // 不用子串（避免「旅行」误命中「旅行记」）。
+          if (tag != null && tag.isNotEmpty && !e.tags.contains(tag)) return false;
           if (before == null) return true;
           // 与生产实现口径一致：游标比较用毫秒 epoch，不用微秒精度的 DateTime。
           final created = e.createdAt.millisecondsSinceEpoch;

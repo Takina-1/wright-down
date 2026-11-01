@@ -14,7 +14,7 @@
 | F006 | 心情打卡 | P1 | 已完成 | [需求与方案](F006-心情打卡-mood-checkin.md) · [计划](F006-心情打卡计划-mood-checkin-plan.md) | [测试报告](../test-reports/F006-心情打卡测试报告-mood-checkin-test-report.md) | 真机验收（Xiaomi 2211133C / Android 15）已执行并合并到 main：AC-01~AC-03、AC-05~AC-12 通过，含 schema v2→v3 升级与幂等、备份导出与旧备份导入、小屏布局；AC-04 位置偏差（时间轴 emoji 实现在正文左侧，与「正文上方」不符）经用户 2026-10-31 接受并暂缓处置；已通过合并提交 `ea2d7b8` 合并到 `main` |
 | F007 | 连续天数 | P1 | 已完成 | [需求与方案](F007-连续天数-consecutive-days.md) | [测试报告](../test-reports/F007-连续天数测试报告-consecutive-days-test-report.md) | 宿主侧静态分析无问题、301 项测试通过、调试 APK 构建通过；Xiaomi 2211133C（Android 15）真机验收 AC-01~AC-11 全部通过。真机验收发现并修复缺陷 D-01（`current` 恒为 0，根因是 `today` 带时刻而 `dayKey` 是 naive 日历日），已补 4 项带时刻的回归测试；已通过合并提交 `0d75fda` 合并到 `main` |
 | F008 | 随机一篇 | P1 | 已完成 | [需求与方案](F008-随机一篇-random-entry.md) | [测试报告](../test-reports/F008-随机一篇测试报告-random-entry-test-report.md) | 宿主侧静态分析无问题、314 项测试通过、调试 APK 构建通过；Xiaomi 2211133C（Android 15）真机验收 AC-01~AC-08 全部通过。实现中修复 3 项缺陷（D-01 文本撞车、D-02 布局溢出、D-03 换一篇排除失效）；已通过合并提交 `8357a8e` 合并到 `main` |
-| F009 | 标签 | P1 | 待开发 | [需求与方案](F009-标签-tags.md) | — | 给 Entry 加 tags 字段，涉及 schema 迁移；标签增删改 + 按标签筛选 |
+| F009 | 标签 | P1 | 已完成 | [需求与方案](F009-标签-tags.md) | [测试报告](../test-reports/F009-标签测试报告-tags-test-report.md) | 宿主侧静态分析无问题、343 项测试通过、调试 APK 构建通过；Xiaomi 2211133C（Android 15）真机验收 AC-01~AC-10 全部通过。标签存 JSON 数组字符串，筛选用 instr 精确匹配；schema 升 v4、备份格式升 v3；实现中修复 2 项缺陷（D-01 小屏溢出、D-02 测试替身漏写 tags） |
 | F010 | 随手拍 | P1 | 待开发 | [需求与方案](F010-随手拍-photos.md) | — | 照片关联到条目，涉及图片存储与 schema 迁移 |
 | F011 | 热力图 | P1 | 待开发 | [需求与方案](F011-热力图-heatmap.md) | — | 日历热力图，放统计页做辅助；依赖 dayKey 聚合（已有） |
 | F012 | 语音输入 | P1 | 待办 | [需求与方案](F012-语音输入-voice-input.md) | — | 端侧录音 + ASR + 云端精修；涉及合规（麦克风权限、隐私弹窗、国内 ASR 选型），暂不处理，仅记录待办 |

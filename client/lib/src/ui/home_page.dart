@@ -25,6 +25,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final EntryEditorController _editor;
   final _text = TextEditingController();
+  final _tagInput = TextEditingController();
   final _focus = FocusNode();
   var _tab = 0;
   var _revision = 0;
@@ -38,6 +39,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       idGenerator: const Uuid().v4,
       now: DateTime.now,
     )..addListener(_changed);
+    _tagInput.addListener(_onTagInputChanged);
+  }
+
+  void _onTagInputChanged() {
+    // 输入框内容变化时不立即写控制器：标签只在「添加」时落库，
+    // 避免每个字符都触发一次 flush 防抖。回车或点「添加」才提交。
   }
 
   void _changed() {
@@ -130,6 +137,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     if (picked == null) return; // 取消
     _editor.setMood(picked.isEmpty ? null : picked);
+  }
+
+  /// 添加当前输入框里的标签。回车或点「添加」触发。
+  ///
+  /// 规范化后若与已有标签重复则不重复添加；空输入忽略。
+  void _addTag() {
+    final raw = _tagInput.text;
+    if (raw.trim().isEmpty) return;
+    final next = [..._editor.tags, raw];
+    _editor.setTags(next);
+    _tagInput.clear();
+  }
+
+  /// 移除某个标签。
+  void _removeTag(String tag) {
+    _editor.setTags(_editor.tags.where((t) => t != tag).toList());
   }
 
   Future<void> _edit(Entry entry) async {
@@ -293,6 +316,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _editor.removeListener(_changed);
     _editor.dispose();
     _text.dispose();
+    _tagInput.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -406,6 +430,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 key: const Key('mood-entry'),
                 icon: Text(_editor.mood == null ? '😊' : emojiOf(_editor.mood)),
                 onPressed: _transitioning ? null : _showMoodSheet,
+              ),
+            ],
+          ),
+          if (_editor.tags.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final tag in _editor.tags)
+                  ActionChip(
+                    key: Key('tag-chip-$tag'),
+                    label: Text(tag),
+                    onPressed: _transitioning
+                        ? null
+                        : () => _removeTag(tag),
+                  ),
+              ],
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('tag-input'),
+                  controller: _tagInput,
+                  enabled: !_transitioning,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addTag(),
+                  decoration: const InputDecoration(
+                    hintText: '加标签，回车确认',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 6),
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+              IconButton(
+                key: const Key('tag-add'),
+                icon: const Icon(Icons.add, size: 20),
+                onPressed: _transitioning ? null : _addTag,
               ),
             ],
           ),

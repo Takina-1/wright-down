@@ -15,6 +15,7 @@ class Entry {
     required this.dayKey,
     this.deletedAt,
     this.mood,              // 可选；稳定标记字符串，非 emoji
+    this.tags = const [],   // 可选；已规范化（trim、去空、去重、保序），默认空列表
   });
 
   final String id;
@@ -28,6 +29,9 @@ class Entry {
 
   /// 心情标记。非空表示这条记录带心情。
   final String? mood;
+
+  /// 标签列表。空列表表示无标签；不保证非空，构造时由调用方规范化。
+  final List<String> tags;
 
   bool get isDeleted => deletedAt != null;
 }

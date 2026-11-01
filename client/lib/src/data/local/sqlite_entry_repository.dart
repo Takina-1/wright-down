@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../../domain/entry.dart';
@@ -16,7 +18,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 3,
+          version: 4,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -29,7 +31,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               updated_at INTEGER NOT NULL,
               day_key TEXT NOT NULL,
               deleted_at INTEGER,
-              mood TEXT
+              mood TEXT,
+              tags TEXT
             )''');
             await db.execute(
               'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
@@ -64,6 +67,16 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 await db.execute('ALTER TABLE entries ADD COLUMN mood TEXT');
               }
             }
+            if (oldVersion < 4) {
+              // F009 的 tags 迁移同样幂等：用户若用旧版打开过，列可能已在。
+              // tags 存 JSON 数组字符串（jsonEncode），读回时 jsonDecode，
+              // 解码失败退回空列表（脏数据不崩）。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasTags = columns.any((row) => row['name'] == 'tags');
+              if (!hasTags) {
+                await db.execute('ALTER TABLE entries ADD COLUMN tags TEXT');
+              }
+            }
           },
         ),
       ));
@@ -73,14 +86,16 @@ class SqliteEntryRepository implements LocalEntryRepository {
     }
   }
 
-  @override
-  Future<void> save(Entry entry) async {
+    @override
+    Future<void> save(Entry entry) async {
     if (entry.id.isEmpty || entry.content.trim().isEmpty) {
       throw ArgumentError('An entry needs an id and non-empty content');
     }
     final db = await _database();
     final deletedAt = entry.deletedAt;
     final mood = entry.mood;
+    // tags 存 JSON 数组字符串；空列表存 '[]'，避免 NULL 与空串混淆。
+    final tagsJson = jsonEncode(entry.tags);
     await db.transaction((txn) async {
       final updated = await txn.update(
         'entries',
@@ -97,6 +112,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           // null），编辑正文时构造的 Entry 不带 deletedAt，若整体写 null 会
           // 无声复活条目；mood 没有这种伴生操作，靠 save 本身即可清除。
           'mood': mood,
+          // tags 同样 always-write：传入空列表即清除库中已有标签。
+          'tags': tagsJson,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -111,27 +128,36 @@ class SqliteEntryRepository implements LocalEntryRepository {
           if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
           // mood 总是写：与 update 分支同口径，null 即不写心情。
           'mood': mood,
+          'tags': tagsJson,
         });
       }
     });
   }
 
   @override
-  Future<List<Entry>> list({EntryCursor? before, int limit = 30}) async {
+  Future<List<Entry>> list({EntryCursor? before, String? tag, int limit = 30}) async {
     if (limit < 1) throw ArgumentError.value(limit, 'limit');
     final db = await _database();
+    // 标签存 JSON 数组字符串，用 instr 找引号包着的该标签（如 ["旅行","读书"]
+    // 里找 "旅行"）。instr 是纯子串匹配，不解释通配符，标签含 % 或 _ 也不会
+    // 误命中，无需转义。标签按原样匹配（大小写敏感，与 normalizeTags 一致）。
+    final whereParts = <String>['deleted_at IS NULL'];
+    final whereArgs = <Object?>[];
+    if (before != null) {
+      whereParts.add('(created_at < ? OR (created_at = ? AND id < ?))');
+      whereArgs
+        ..add(before.createdAt.millisecondsSinceEpoch)
+        ..add(before.createdAt.millisecondsSinceEpoch)
+        ..add(before.id);
+    }
+    if (tag != null && tag.isNotEmpty) {
+      whereParts.add('instr(tags, ?) > 0');
+      whereArgs.add('"$tag"');
+    }
     final rows = await db.query(
       'entries',
-      where: before == null
-          ? 'deleted_at IS NULL'
-          : 'deleted_at IS NULL AND (created_at < ? OR (created_at = ? AND id < ?))',
-      whereArgs: before == null
-          ? null
-          : [
-              before.createdAt.millisecondsSinceEpoch,
-              before.createdAt.millisecondsSinceEpoch,
-              before.id,
-            ],
+      where: whereParts.join(' AND '),
+      whereArgs: whereArgs,
       orderBy: 'created_at DESC, id DESC',
       limit: limit,
     );
@@ -284,6 +310,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
               // 插入时带上心情：与 update 分支同口径，null 即不带心情。
               'mood': decision.entry.mood,
+              // 插入时带上标签：存 JSON 数组字符串。
+              'tags': jsonEncode(decision.entry.tags),
             });
             inserted++;
           case MergeAction.update:
@@ -299,6 +327,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 'deleted_at': decision.entry.deletedAt?.millisecondsSinceEpoch,
                 // mood 跟 updatedAt 走：备份带 mood 用备份的，备份不带 mood 清空本地 mood。
                 'mood': decision.entry.mood,
+                // tags 跟 updatedAt 走：备份带标签用备份的，备份不带标签清空本地标签。
+                'tags': jsonEncode(decision.entry.tags),
               },
               where: 'id = ?',
               whereArgs: [entry.id],
@@ -319,6 +349,22 @@ class SqliteEntryRepository implements LocalEntryRepository {
   Entry _toEntry(Map<String, Object?> row) {
     final deletedAt = row['deleted_at'] as int?;
     final mood = row['mood'] as String?;
+    // tags 存 JSON 数组字符串。解码失败（脏数据、旧库、手工改过的备份）
+    // 退回空列表，不让回顾页崩溃——与 F004 对 dayKey 脏数据的口径一致。
+    final tags = <String>[];
+    final rawTags = row['tags'];
+    if (rawTags is String && rawTags.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawTags);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is String) tags.add(item);
+          }
+        }
+      } catch (_) {
+        // 解码失败留空，条目仍可显示。
+      }
+    }
     return Entry(
       id: row['id'] as String,
       content: row['content'] as String,
@@ -335,6 +381,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
           ? null
           : DateTime.fromMillisecondsSinceEpoch(deletedAt, isUtc: true),
       mood: mood,
+      tags: tags,
     );
   }
 
