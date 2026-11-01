@@ -25,12 +25,6 @@ int levelOf(int count) {
   return 4;
 }
 
-/// 把 YYYY-MM-DD 解析成 naive 本地日历日。
-DateTime _parseNaive(String key) {
-  final parts = key.split('-');
-  return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-}
-
 /// 把 DateTime 格式化成 YYYY-MM-DD。
 String _formatKey(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-'

@@ -178,12 +178,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 本页只有这三个入口 ListTile，顺序和图标都不能被悄悄改掉。
+    // 本页只有这四个入口 ListTile，顺序和图标都不能被悄悄改掉。
+    // F011 起新增「统计」入口（热力图），放在「导出与备份」之前。
     final titles = tester
         .widgetList<ListTile>(find.byType(ListTile))
         .map((tile) => (tile.title as Text).data)
         .toList();
-    expect(titles, ['导出与备份', '回收站', '本地数据说明']);
+    expect(titles, ['统计', '导出与备份', '回收站', '本地数据说明']);
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
   });
 }
