@@ -117,12 +117,12 @@ client/test/ui/home_page_photo_test.dart          新增：记录页选图组件
 
 | 任务 | 依赖 | 产出 | 检查方式 | 完成情况 |
 |---|---|---|---|---|
-| T1 | — | Entry 加 photo 字段 | 域层单测（空/非空） | 未开始 |
-| T2 | T1 | schema v5 + 仓储 photo 读写 + backup v4 + merge | 仓储/备份单测 | 未开始 |
-| T3 | T2 | 记录页照片选择与缩略图 | 组件测试 | 未开始 |
-| T4 | T2 | 回顾页条目缩略图 | 组件测试 | 未开始 |
-| T5 | T1-T4 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 未开始 |
-| T6 | T5 | 真机验收并更新报告与台账 | 按第 7 节执行 | 未开始 |
+| T1 | — | Entry 加 photo 字段 | 域层单测（空/非空） | 已完成 |
+| T2 | T1 | schema v5 + 仓储 photo 读写 + backup v4 + merge | 仓储/备份单测 | 已完成（v5 迁移幂等、photo 往返、备份 base64、合并带照片） |
+| T3 | T2 | 记录页照片选择与缩略图 | 组件测试 | 已完成（选图/移除/无照片，mock file_picker 平台） |
+| T4 | T2 | 回顾页条目缩略图 | 组件测试 | 已完成（有照片显示/无照片不显示） |
+| T5 | T1-T4 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 已完成（analyze 无问题、364 项测试通过、APK 构建成功） |
+| T6 | T5 | 真机验收并更新报告与台账 | 按第 7 节执行 | 已完成（Xiaomi 2211133C / Android 15；v5 迁移跑通、照片入口存在） |
 
 ## 7. 测试计划
 
@@ -138,11 +138,31 @@ client/test/ui/home_page_photo_test.dart          新增：记录页选图组件
 
 ## 8. 实施变化与交付
 
-- 实际实现路径：完成后填写
-- 实际检查命令：执行后填写
-- 已知限制与未完成项：如实填写
-- 测试报告与交付物：创建后链接
+- 实际实现路径：按第 6 节任务表顺序完成 T1–T6，全部在 `feat/F010-photos` 分支（从 main 的 `d3c59ca` 开出）。T1 Entry 加 photo 字段；T2 schema v5 + 仓储 + 备份 v4 + 合并；T3 记录页照片选择与缩略图；T4 回顾页条目缩略图；T5 全量检查与构建；T6 真机验收（Xiaomi 2211133C / Android 15，adb 驱动）。
+- 实际检查命令（第 1 轮，宿主侧）：
+  ```bash
+  cd client
+  flutter pub get              # 新增 cross_file / plugin_platform_interface 测试依赖
+  flutter analyze              # No issues found!
+  flutter test                 # 364 项全部通过
+  flutter build apk --debug    # √ Built build/app/outputs/flutter-apk/app-debug.apk
+  ```
+- 实现细节与偏差：
+  - 照片存 BLOB 原始字节（`Uint8List`），不用 base64 存库（避免膨胀）；备份里才用 base64（JSON 自包含）。
+  - sqflite（平台实现与 FFI）都接受 `Uint8List` 作 BLOB，不要用 `toList()`——FFI 不接受 `List<int>`。`_decodePhoto` 同时兼容 FFI 读回的 `Uint8List` 与平台读回的 `List<int>`。
+  - photo always-write 口径（与 mood/tags 一致）：save 总是写传入字节，null 即清除；合并时照片跟 `updatedAt` 走。
+  - 记录页照片选择用 `file_picker` 的 `FilePicker.pickFiles(type: FileType.custom, allowedExtensions: [...])`，取 `file.readAsBytes()`。缩略图右上角「✕」移除，点缩略图重新选图替换。
+  - 回顾页条目 tile 的 subtitle 顶部显示照片缩略图（120×80，ClipRRect 圆角）。
+  - 组件测试用 mock `FilePickerPlatform` 驱动选图路径（系统 SAF 弹窗无法在 widget test 里点）。
+  - 测试替身 `MemoryRepository.save` 更新分支补了 `photo`（always-write 口径，与生产一致）。
+- 已知限制与未完成项：
+  - 真机相册选图弹窗（系统 SAF）无法由 adb 驱动，AC-01/02/03 的选图/替换交互由宿主侧 mock 平台组件测试覆盖。
+  - 每条只配一张图，不做多图、不做相机直拍、不做裁剪滤镜。
+  - 照片大小不设硬限制，单张建议不超过 5MB。
+- 测试报告与交付物：[F010 随手拍测试报告](../test-reports/F010-随手拍测试报告-photos-test-report.md)
 
 | 日期 | 需求或方案变化 | 原因与决策来源 | 影响的验收标准 |
 |---|---|---|---|
 | 2026-11-01 | 初版：条目加 photo 字段，BLOB 存原始字节，备份 base64 | 用户确认处理 Phase 2 剩余功能 | AC-01 ~ AC-10 |
+| 2026-11-01 | photo 存 BLOB 用 Uint8List（不用 base64 存库）；备份里才 base64 | 避免库内 base64 膨胀；备份需 JSON 自包含 | AC-08 |
+| 2026-11-01 | photo always-write 口径（save 总是写、null 即清除），与 mood/tags 一致 | 与 mood/tags 同口径，避免「非空才写」导致无法清除照片 | AC-02 |
