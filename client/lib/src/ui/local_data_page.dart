@@ -4,6 +4,7 @@ import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import '../platform/saf_file_gateway.dart';
 import 'export_page.dart';
+import 'stats_page.dart';
 import 'trash_page.dart';
 
 class LocalDataPage extends StatelessWidget {
@@ -43,6 +44,17 @@ class LocalDataPage extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 24),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.grid_view),
+        title: const Text('统计'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (context) => StatsPage(repository: repository),
+          ),
+        ),
+      ),
       ListTile(
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.archive_outlined),
