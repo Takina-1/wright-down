@@ -17,8 +17,8 @@ void main() {
     final original = entry('a', '今天走了很远。\n明天继续 🌿');
     final text = codec.encode([original], exportedAt: created);
     final decoded = codec.decode(text);
-    // 备份格式已升到版本 2。
-    expect(decoded.version, 3);
+    // 备份格式已升到版本 4（F010 加 photo）。
+    expect(decoded.version, 4);
     expect(decoded.exportedAt, created);
     expect(decoded.entries, hasLength(1));
     expect(decoded.entries.single.id, 'a');
@@ -64,7 +64,7 @@ void main() {
   test('a newer backup version asks the user to update the app', () {
     expect(
       () => codec.decode(
-        '{"format":"local-diary-backup","version":4,"entries":[]}',
+        '{"format":"local-diary-backup","version":5,"entries":[]}',
       ),
       throwsA(
         isA<BackupFormatException>().having(
@@ -234,11 +234,11 @@ void main() {
       );
 
       final text = codec.encode([deleted, live]);
-      expect(text, contains('"version": 3'));
+      expect(text, contains('"version": 4'));
       expect(text, contains('deletedAt'));
 
       final document = codec.decode(text);
-      expect(document.version, 3);
+      expect(document.version, 4);
       expect(document.entries, hasLength(2));
       expect(document.entries.first.deletedAt, DateTime.utc(2026, 10, 30, 5));
       // 锁死 deletedAt 与 updatedAt 不会互换。
@@ -280,7 +280,7 @@ void main() {
     test('version 高于当前支持时提示升级', () {
       expect(
         () => const BackupCodec().decode(
-          '{"format":"local-diary-backup","version":4,'
+          '{"format":"local-diary-backup","version":5,'
           '"exportedAt":"2026-10-28T02:00:00.000Z","entryCount":0,"entries":[]}',
         ),
         throwsA(

@@ -21,6 +21,7 @@ class EntryEditorController extends ChangeNotifier {
   String _savedContent = '';
   String? _savedMood;
   List<String> _savedTags = const [];
+  Uint8List? _savedPhoto;
   String? _id;
   DateTime? _createdAt;
   String? _dayKey;
@@ -34,10 +35,12 @@ class EntryEditorController extends ChangeNotifier {
   String? _deleteError;
   String? _mood;
   List<String> _tags = const [];
+  Uint8List? _photo;
 
   String get content => _content;
   String? get mood => _mood;
   List<String> get tags => _tags;
+  Uint8List? get photo => _photo;
   SaveStatus get status => _status;
   String? get error => _error;
 
@@ -48,7 +51,8 @@ class EntryEditorController extends ChangeNotifier {
       _persisted
           ? _content != _savedContent ||
               _mood != _savedMood ||
-              _tags != _savedTags
+              _tags != _savedTags ||
+              _photo != _savedPhoto
           : _content.trim().isNotEmpty;
   bool get hasPendingChanges => _writing || _dirty;
 
@@ -95,6 +99,22 @@ class EntryEditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// 设置照片字节。传入 null 即清除照片。
+  ///
+  /// 与 setMood/setTags 同口径：变化触发 flush；空正文时保存跳过，照片随正文一起落库。
+  /// 传入非空字节即替换/新增照片（Uint8List 按引用比较，新选图必然不同）。
+  void setPhoto(Uint8List? photo) {
+    if (_disposed) return;
+    if ((photo == null && _photo == null) ||
+        (photo != null && photo == _photo)) {
+      return;
+    }
+    _photo = photo;
+    _timer?.cancel();
+    _timer = Timer(const Duration(seconds: 1), () => unawaited(flush()));
+    _notify();
+  }
+
   Future<bool> flush() {
     _timer?.cancel();
     if (_disposed) return Future.value(false);
@@ -127,6 +147,7 @@ class EntryEditorController extends ChangeNotifier {
         dayKey: _dayKey!,
         mood: _mood,
         tags: _tags,
+        photo: _photo,
       );
       _status = SaveStatus.saving;
       _error = null;
@@ -138,6 +159,7 @@ class EntryEditorController extends ChangeNotifier {
         _savedContent = snapshot.content;
         _savedMood = snapshot.mood;
         _savedTags = snapshot.tags;
+        _savedPhoto = snapshot.photo;
       } catch (_) {
         _timer?.cancel();
         _status = SaveStatus.error;
@@ -160,10 +182,12 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _savedMood = null;
     _savedTags = const [];
+    _savedPhoto = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
     _tags = const [];
+    _photo = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -180,6 +204,7 @@ class EntryEditorController extends ChangeNotifier {
     _dayKey = entry.dayKey;
     _mood = _savedMood = entry.mood;
     _tags = _savedTags = entry.tags;
+    _photo = _savedPhoto = entry.photo;
     _persisted = true;
     _error = null;
     _deleteError = null;
@@ -230,10 +255,12 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _savedMood = null;
     _savedTags = const [];
+    _savedPhoto = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
     _tags = const [];
+    _photo = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -253,10 +280,12 @@ class EntryEditorController extends ChangeNotifier {
     _content = _savedContent = '';
     _savedMood = null;
     _savedTags = const [];
+    _savedPhoto = null;
     _id = _dayKey = null;
     _createdAt = null;
     _mood = null;
     _tags = const [];
+    _photo = null;
     _persisted = false;
     _error = null;
     _deleteError = null;

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:sqflite_common/sqlite_api.dart';
 
@@ -18,7 +19,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 4,
+          version: 5,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -32,7 +33,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               day_key TEXT NOT NULL,
               deleted_at INTEGER,
               mood TEXT,
-              tags TEXT
+              tags TEXT,
+              photo BLOB
             )''');
             await db.execute(
               'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
@@ -77,6 +79,15 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 await db.execute('ALTER TABLE entries ADD COLUMN tags TEXT');
               }
             }
+            if (oldVersion < 5) {
+              // F010 的 photo 迁移同样幂等：用户若用旧版打开过，列可能已在。
+              // photo 存照片原始字节（BLOB），读回时 toList() 成 Uint8List。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasPhoto = columns.any((row) => row['name'] == 'photo');
+              if (!hasPhoto) {
+                await db.execute('ALTER TABLE entries ADD COLUMN photo BLOB');
+              }
+            }
           },
         ),
       ));
@@ -96,6 +107,9 @@ class SqliteEntryRepository implements LocalEntryRepository {
     final mood = entry.mood;
     // tags 存 JSON 数组字符串；空列表存 '[]'，避免 NULL 与空串混淆。
     final tagsJson = jsonEncode(entry.tags);
+    // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
+    // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
+    final photo = entry.photo;
     await db.transaction((txn) async {
       final updated = await txn.update(
         'entries',
@@ -114,6 +128,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'mood': mood,
           // tags 同样 always-write：传入空列表即清除库中已有标签。
           'tags': tagsJson,
+          // photo 同样 always-write：传入 null 即清除库中已有照片。
+          'photo': photo,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -129,6 +145,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           // mood 总是写：与 update 分支同口径，null 即不写心情。
           'mood': mood,
           'tags': tagsJson,
+          // photo 总是写：与 update 分支同口径，null 即不写照片。
+          'photo': photo,
         });
       }
     });
@@ -312,6 +330,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               'mood': decision.entry.mood,
               // 插入时带上标签：存 JSON 数组字符串。
               'tags': jsonEncode(decision.entry.tags),
+              // 插入时带上照片：存 BLOB（Uint8List），null 即不带照片。
+              'photo': decision.entry.photo,
             });
             inserted++;
           case MergeAction.update:
@@ -329,6 +349,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 'mood': decision.entry.mood,
                 // tags 跟 updatedAt 走：备份带标签用备份的，备份不带标签清空本地标签。
                 'tags': jsonEncode(decision.entry.tags),
+                // photo 跟 updatedAt 走：备份带照片用备份的，备份不带照片清空本地照片。
+                'photo': decision.entry.photo,
               },
               where: 'id = ?',
               whereArgs: [entry.id],
@@ -382,7 +404,20 @@ class SqliteEntryRepository implements LocalEntryRepository {
           : DateTime.fromMillisecondsSinceEpoch(deletedAt, isUtc: true),
       mood: mood,
       tags: tags,
+      photo: _decodePhoto(row['photo']),
     );
+  }
+
+  /// 解码照片 BLOB。脏数据（非列表、空）退回 null，不让界面崩溃。
+  ///
+  /// 平台实现（Android）读回的是 `List<int>`，宿主 FFI 读回的是 `Uint8List`，
+  /// 两者都转成 `Uint8List` 交给上层。
+  Uint8List? _decodePhoto(Object? raw) {
+    if (raw is Uint8List && raw.isNotEmpty) return raw;
+    if (raw is List && raw.isNotEmpty) {
+      return Uint8List.fromList(raw.map((v) => (v as num).toInt()).toList());
+    }
+    return null;
   }
 
   @override

@@ -45,6 +45,7 @@ MergeDecision decideMerge({Entry? local, required Entry incoming}) {
         deletedAt: incoming.deletedAt,
         mood: incoming.mood, // mood 跟 updatedAt 走
         tags: incoming.tags, // tags 跟 updatedAt 走
+        photo: incoming.photo, // photo 跟 updatedAt 走
       ),
     );
   }

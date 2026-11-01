@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import '../entry.dart';
 import 'backup_document.dart';
@@ -120,6 +121,12 @@ class BackupCodec {
     if (entry.tags.isNotEmpty) {
       map['tags'] = entry.tags;
     }
+    // photo 只有非空时才写键（base64 字符串）：未配照片的条目不写，
+    // v3 旧备份因此仍可被解码。
+    final photo = entry.photo;
+    if (photo != null) {
+      map['photo'] = base64Encode(photo);
+    }
     return map;
   }
 
@@ -160,6 +167,20 @@ class BackupCodec {
         tags.add(item);
       }
     }
+    // photo 是可选字段：缺失（v3 旧备份）合法，视为空；存在但非字符串说明
+    // 备份已损坏。base64 解码失败也判损坏（不让 TypeError 逃逸）。
+    final rawPhoto = raw['photo'];
+    Uint8List? photo;
+    if (rawPhoto != null) {
+      if (rawPhoto is! String) {
+        throw const BackupFormatException(damagedReason);
+      }
+      try {
+        photo = base64.decode(rawPhoto);
+      } on FormatException {
+        throw const BackupFormatException(damagedReason);
+      }
+    }
     return Entry(
       id: id,
       content: content,
@@ -169,6 +190,7 @@ class BackupCodec {
       deletedAt: rawDeletedAt == null ? null : _parseDate(rawDeletedAt),
       mood: rawMood as String?,
       tags: tags,
+      photo: photo,
     );
   }
 

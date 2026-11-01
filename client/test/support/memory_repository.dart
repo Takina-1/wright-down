@@ -70,6 +70,8 @@ class MemoryRepository implements LocalEntryRepository {
       mood: entry.mood,
       // tags 同样 always-write：与 mood 同口径，传入的列表即写入（空列表即清除）。
       tags: entry.tags,
+      // photo 同样 always-write：与 mood/tags 同口径，传入的字节即写入（null 即清除）。
+      photo: entry.photo,
     );
   }
 

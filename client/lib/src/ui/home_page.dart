@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -138,6 +139,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (picked == null) return; // 取消
     _editor.setMood(picked.isEmpty ? null : picked);
   }
+
+  /// 从相册选一张照片。选到非图片文件或取消都不改照片。
+  Future<void> _pickPhoto() async {
+    final files = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'],
+    );
+    if (!mounted) return;
+    final file = files.firstOrNull;
+    if (file == null) return; // 取消
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    if (bytes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择图片')),
+      );
+      return;
+    }
+    _editor.setPhoto(bytes);
+  }
+
+  /// 移除当前照片。
+  void _removePhoto() => _editor.setPhoto(null);
 
   /// 添加当前输入框里的标签。回车或点「添加」触发。
   ///
@@ -431,8 +455,62 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 icon: Text(_editor.mood == null ? '😊' : emojiOf(_editor.mood)),
                 onPressed: _transitioning ? null : _showMoodSheet,
               ),
+              IconButton(
+                key: const Key('photo-entry'),
+                icon: const Icon(Icons.add_a_photo_outlined),
+                onPressed: _transitioning ? null : _pickPhoto,
+              ),
             ],
           ),
+          if (_editor.photo != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                key: const Key('photo-thumbnail'),
+                onTap: _transitioning ? null : _pickPhoto,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor,
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Image.memory(
+                        _editor.photo!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) =>
+                            const Center(child: Text('图片无法显示')),
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        key: const Key('photo-remove'),
+                        onTap: _transitioning ? null : _removePhoto,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (_editor.tags.isNotEmpty)
             Wrap(
               spacing: 8,
