@@ -129,12 +129,12 @@ client/test/ui/timeline_page_tag_filter_test.dart  新增：筛选组件测试
 
 | 任务 | 依赖 | 产出 | 检查方式 | 完成情况 |
 |---|---|---|---|---|
-| T1 | — | `domain/tags.dart` normalizeTags + Entry 加 tags | 域层单测（trim/去重/空/大小写） | 未开始 |
-| T2 | T1 | schema v4 + 仓储 tags 读写 + backup v3 + merge | 仓储/备份单测 | 未开始 |
-| T3 | T2 | 记录页标签输入 | 组件测试 | 未开始 |
-| T4 | T2 | 回顾页标签筛选栏 | 组件测试 | 未开始 |
-| T5 | T1-T4 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 未开始 |
-| T6 | T5 | 真机验收并更新报告与台账 | 按第 7 节执行 | 未开始 |
+| T1 | — | `domain/tags.dart` normalizeTags + Entry 加 tags | 域层单测（trim/去重/空/大小写） | 已完成 |
+| T2 | T1 | schema v4 + 仓储 tags 读写 + backup v3 + merge | 仓储/备份单测 | 已完成（v4 迁移幂等、list(tag) 筛选、备份往返、合并带标签） |
+| T3 | T2 | 记录页标签输入 | 组件测试 | 已完成（加/移除/去重/空输入） |
+| T4 | T2 | 回顾页标签筛选栏 | 组件测试 | 已完成（筛选/清除/空状态/无标签不显示筛选栏） |
+| T5 | T1-T4 | 全量检查与构建 | 静态分析、全部测试、调试 APK | 已完成（analyze 无问题、343 项测试通过、APK 构建成功） |
+| T6 | T5 | 真机验收并更新报告与台账 | 按第 7 节执行 | 已完成（Xiaomi 2211133C / Android 15；AC-01~AC-10 全部通过） |
 
 ## 7. 测试计划
 
@@ -150,11 +150,30 @@ client/test/ui/timeline_page_tag_filter_test.dart  新增：筛选组件测试
 
 ## 8. 实施变化与交付
 
-- 实际实现路径：完成后填写
-- 实际检查命令：执行后填写
-- 已知限制与未完成项：如实填写
-- 测试报告与交付物：创建后链接
+- 实际实现路径：按第 6 节任务表顺序完成 T1–T6，全部在 `feat/F009-tags` 分支（从 main 的 `23795e2` 开出）。T1 纯函数 + 域层单测；T2 schema v4 + 仓储 + 备份 v3 + 合并；T3 记录页标签输入；T4 回顾页标签筛选栏；T5 全量检查与构建；T6 真机验收（Xiaomi 2211133C / Android 15，adb 驱动）。
+- 实际检查命令（第 1 轮，宿主侧）：
+  ```bash
+  cd client
+  flutter analyze                      # No issues found!
+  flutter test                         # 343 项全部通过
+  flutter build apk --debug            # √ Built build/app/outputs/flutter-apk/app-debug.apk
+  ```
+- 实现细节与偏差：
+  - 标签存 JSON 数组字符串（`jsonEncode`），读回 `jsonDecode`，解码失败退回空列表（脏数据不崩，与 F004 口径一致）。空列表存 `'[]'`，避免 NULL 与空串混淆。
+  - 标签筛选用 `instr(tags, ?)` 精确匹配引号子串（如 `["旅行","读书"]` 里找 `"旅行"`），避免「旅行」误命中「旅行记」这类前缀串；大小写敏感，与 `normalizeTags` 一致。不用 LIKE 是因为 LIKE 通配符需 ESCAPE 子句，`instr` 更简单且无需转义。
+  - 筛选栏只显示已加载条目里出现过的标签（保序去重）；分页加载的旧条目标签不进筛选栏，本期可接受。
+  - 标签 always-write 口径（与 mood 一致）：save 总是写传入列表，空列表即清除；合并时标签跟 `updatedAt` 走。
+  - 记录页标签输入：回车或点「添加」提交，空输入忽略，重复标签自动去重（`normalizeTags`）。标签 chip 可点移除。
+  - 回顾页条目 tile 的 subtitle 里显示标签 chip。
+  - 测试替身 `MemoryRepository.save` 更新分支补了 `tags`（与生产 always-write 口径一致），否则标签不落库、组件测试断言落空。
+- 已知限制与未完成项：
+  - 不做标签管理页（重命名/删除标签本身、查看标签使用次数）。
+  - 不做多标签组合筛选（AND/OR），本期单标签筛选。
+  - 筛选栏只显示已加载条目里的标签。
+- 测试报告与交付物：[F009 标签测试报告](../test-reports/F009-标签测试报告-tags-test-report.md)
 
 | 日期 | 需求或方案变化 | 原因与决策来源 | 影响的验收标准 |
 |---|---|---|---|
 | 2026-11-01 | 初版：条目加 tags 字段，JSON 存 TEXT 列，回顾页按标签筛选 | 用户确认处理 Phase 2 剩余功能 | AC-01 ~ AC-10 |
+| 2026-11-01 | 标签筛选用 `instr(tags, ?)` 精确匹配引号子串，不用 LIKE | LIKE 通配符需 ESCAPE 子句，instr 更简单且无需转义；避免前缀误命中 | AC-03 |
+| 2026-11-01 | 标签 always-write 口径（save 总是写、空列表即清除），与 mood 一致 | 与 mood 同口径，避免「非空才写」导致无法清除标签 | AC-02 |
