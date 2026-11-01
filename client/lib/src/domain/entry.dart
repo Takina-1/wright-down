@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// dayKey 必须是零填充的 ISO 日期，形如 2026-10-28。
 ///
 /// 备份解码、导入与界面分组共用这一条规则，避免各处各写一份判断。
@@ -16,6 +18,7 @@ class Entry {
     this.deletedAt,
     this.mood,              // 可选；稳定标记字符串，非 emoji
     this.tags = const [],   // 可选；已规范化（trim、去空、去重、保序），默认空列表
+    this.photo,             // 可选；照片原始字节（Uint8List?）
   });
 
   final String id;
@@ -32,6 +35,9 @@ class Entry {
 
   /// 标签列表。空列表表示无标签；不保证非空，构造时由调用方规范化。
   final List<String> tags;
+
+  /// 照片原始字节。空（null）表示无照片。存 BLOB 列，备份里以 base64 编码。
+  final Uint8List? photo;
 
   bool get isDeleted => deletedAt != null;
 }
