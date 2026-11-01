@@ -5,8 +5,8 @@ const String kBackupFormat = 'local-diary-backup';
 
 /// 当前写出的备份格式版本。字段或结构变化时递增，旧版本仍应可导入。
 ///
-/// v3（F009）新增条目 `tags` 字段；v2 旧备份无 tags，导入时视为空列表。
-const int kBackupVersion = 3;
+/// v4（F010）新增条目 `photo` 字段（base64 字符串）；v3 旧备份无 photo，导入时视为空。
+const int kBackupVersion = 4;
 
 /// 仍可导入的最旧备份版本。
 const int kMinBackupVersion = 1;
