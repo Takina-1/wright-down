@@ -410,8 +410,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
 
   /// 解码照片 BLOB。脏数据（非列表、空）退回 null，不让界面崩溃。
   ///
-  /// 平台实现（Android）读回的是 List<int>，宿主 FFI 读回的是 Uint8List，
-  /// 两者都转成 Uint8List 交给上层。
+  /// 平台实现（Android）读回的是 `List<int>`，宿主 FFI 读回的是 `Uint8List`，
+  /// 两者都转成 `Uint8List` 交给上层。
   Uint8List? _decodePhoto(Object? raw) {
     if (raw is Uint8List && raw.isNotEmpty) return raw;
     if (raw is List && raw.isNotEmpty) {
