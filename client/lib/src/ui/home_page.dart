@@ -31,6 +31,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   var _tab = 0;
   var _revision = 0;
   var _transitioning = false;
+
+  /// 刚被删除、还可以撤销的条目 ID。
+  ///
+  /// 撤销入口就地显示在记录页里，不用 SnackBar：SnackBar 会浮在
+  /// Scaffold 底部，正好压住记录页固定在底部的「删除这条」「下一条」，
+  /// 用户的点击会落到提示条上而不是按钮上（真机上表现为「下一条」点了没反应，
+  /// 或者误触「撤销」把刚删掉的记录又恢复回来）。
+  String? _undoableEntryId;
   @override
   void initState() {
     super.initState();
