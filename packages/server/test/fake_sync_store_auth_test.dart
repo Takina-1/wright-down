@@ -1,6 +1,5 @@
 import 'package:test/test.dart';
 import 'package:server/server.dart';
-import 'package:sync_core/sync_core.dart';
 
 void main() {
   group('FakeSyncStore 鉴权', () {
