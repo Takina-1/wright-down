@@ -19,6 +19,7 @@ class Entry {
     this.mood,              // 可选；稳定标记字符串，非 emoji
     this.tags = const [],   // 可选；已规范化（trim、去空、去重、保序），默认空列表
     this.photo,             // 可选；照片原始字节（Uint8List?）
+    this.syncStamps = const {}, // 字段级同步时间戳（毫秒），sync 字段名→时间
   });
 
   final String id;
@@ -38,6 +39,12 @@ class Entry {
 
   /// 照片原始字节。空（null）表示无照片。存 BLOB 列，备份里以 base64 编码。
   final Uint8List? photo;
+
+  /// 字段级同步时间戳（毫秒）。键为 sync 字段名（content/mood/tags/deletedAt），
+  /// 值为该字段最后一次写入的毫秒时间戳。缺键表示从未打戳（t=0），用于离线
+  /// 字段级 LWW 同步：字段值变更时打 now，未变更的字段保留旧戳，避免旧值
+  /// 覆盖新值。deletedAt 时间戳由 softDelete/restore 维护，save 不碰。
+  final Map<String, int> syncStamps;
 
   bool get isDeleted => deletedAt != null;
 }

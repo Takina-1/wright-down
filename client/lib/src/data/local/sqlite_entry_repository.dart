@@ -19,7 +19,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 5,
+          version: 6,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -34,7 +34,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               deleted_at INTEGER,
               mood TEXT,
               tags TEXT,
-              photo BLOB
+              photo BLOB,
+              sync_stamps TEXT
             )''');
             await db.execute(
               'CREATE INDEX entries_timeline ON entries(created_at DESC, id DESC)',
@@ -88,6 +89,16 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 await db.execute('ALTER TABLE entries ADD COLUMN photo BLOB');
               }
             }
+            if (oldVersion < 6) {
+              // F013 的 sync_stamps 迁移同样幂等：用户若用旧版打开过，列可能已在。
+              // sync_stamps 存字段级同步时间戳 JSON（字段名→毫秒），读回时
+              // jsonDecode，解码失败退回空 map（脏数据不崩）。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasStamps = columns.any((row) => row['name'] == 'sync_stamps');
+              if (!hasStamps) {
+                await db.execute('ALTER TABLE entries ADD COLUMN sync_stamps TEXT');
+              }
+            }
           },
         ),
       ));
@@ -110,6 +121,22 @@ class SqliteEntryRepository implements LocalEntryRepository {
     // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
     // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
     final photo = entry.photo;
+    // 字段级时间戳取 entry.updatedAt（逻辑更新时间），而非 DateTime.now()
+    // （物理保存时间）。离线编辑时调用方把 updatedAt 设为编辑时刻，
+    // 上线同步时另一设备可能已有更新的字段；用 updatedAt 打戳才能让
+    // LWW 正确保留较新的字段，用 now 会让离线保存时间盖过较早的在线编辑。
+    final now = entry.updatedAt.millisecondsSinceEpoch;
+    // 读当前行：既要比较字段值是否变更（决定打哪些戳），也要拿旧 stamps
+    // 保留未变更字段的时间戳。新建条目查不到行，content/mood/tags 全打 now。
+    final rows = await db.query(
+      'entries',
+      where: 'id = ?',
+      whereArgs: [entry.id],
+      limit: 1,
+    );
+    final existing = rows.isEmpty ? null : _toEntry(rows.first);
+    final stamps = _computeStamps(existing, entry, now);
+    final stampsJson = jsonEncode(stamps);
     await db.transaction((txn) async {
       final updated = await txn.update(
         'entries',
@@ -130,6 +157,9 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 同样 always-write：传入 null 即清除库中已有照片。
           'photo': photo,
+          // sync_stamps 跟字段走：变更字段打 now，未变更字段保留旧戳，
+          // deletedAt 由 softDelete/restore 维护，save 不碰。
+          'sync_stamps': stampsJson,
         },
         where: 'id = ?',
         whereArgs: [entry.id],
@@ -147,6 +177,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 总是写：与 update 分支同口径，null 即不写照片。
           'photo': photo,
+          // 新建条目所有字段打 now。
+          'sync_stamps': stampsJson,
         });
       }
     });
@@ -210,7 +242,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     await db.transaction((txn) async {
       final rows = await txn.query(
         'entries',
-        columns: ['updated_at'],
+        columns: ['updated_at', 'sync_stamps'],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
@@ -223,9 +255,16 @@ class SqliteEntryRepository implements LocalEntryRepository {
       final current = rows.first['updated_at'] as int;
       final stamp = current > now ? current : now;
       // deleted_at 记的是删除发生的墙上时间，与版本戳分开。
+      // sync_stamps['deletedAt'] 打 now：删除状态变更要传播到其他设备。
+      final stamps = _decodeStamps(rows.first['sync_stamps']);
+      stamps['deletedAt'] = now;
       await txn.update(
         'entries',
-        {'deleted_at': now, 'updated_at': stamp},
+        {
+          'deleted_at': now,
+          'updated_at': stamp,
+          'sync_stamps': jsonEncode(stamps),
+        },
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -240,7 +279,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     await db.transaction((txn) async {
       final rows = await txn.query(
         'entries',
-        columns: ['updated_at', 'deleted_at'],
+        columns: ['updated_at', 'deleted_at', 'sync_stamps'],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
@@ -252,9 +291,17 @@ class SqliteEntryRepository implements LocalEntryRepository {
       // 版本戳只许增不许减：恢复时也不能把 updated_at 写小。
       final current = rows.first['updated_at'] as int;
       final stamp = current > now ? current : now;
+      // deleted_at 清除（写 null），但 sync_stamps['deletedAt'] 打 now：
+      // 删除状态从「已删除」变回「未删除」，这个变更要传播到其他设备。
+      final stamps = _decodeStamps(rows.first['sync_stamps']);
+      stamps['deletedAt'] = now;
       await txn.update(
         'entries',
-        {'deleted_at': null, 'updated_at': stamp},
+        {
+          'deleted_at': null,
+          'updated_at': stamp,
+          'sync_stamps': jsonEncode(stamps),
+        },
         where: 'id = ? AND deleted_at IS NOT NULL',
         whereArgs: [id],
       );
@@ -405,7 +452,42 @@ class SqliteEntryRepository implements LocalEntryRepository {
       mood: mood,
       tags: tags,
       photo: _decodePhoto(row['photo']),
+      syncStamps: _decodeStamps(row['sync_stamps']),
     );
+  }
+
+  /// 计算字段级同步时间戳。对已存在条目，只给值变更的字段打 now，未变更字段
+  /// 保留旧戳；对新建条目，content/mood/tags 全部打 now。deletedAt 由
+  /// softDelete/restore 维护，save 不碰。
+  Map<String, int> _computeStamps(Entry? existing, Entry e, int now) {
+    final old = existing?.syncStamps ?? const {};
+    final stamps = <String, int>{...old};
+    void bump(String field, Object? newV, Object? oldV) {
+      if (newV != oldV) stamps[field] = now;
+    }
+    bump('content', e.content, existing?.content);
+    bump('mood', e.mood, existing?.mood);
+    bump('tags', e.tags, existing?.tags);
+    return stamps;
+  }
+
+  /// 解码 sync_stamps JSON。脏数据（非字符串、空、非法 JSON）退回空 map，
+  /// 不让界面崩溃——与 tags 解码口径一致。
+  Map<String, int> _decodeStamps(Object? raw) {
+    final stamps = <String, int>{};
+    if (raw is String && raw.isNotEmpty) {
+      try {
+        final d = jsonDecode(raw);
+        if (d is Map) {
+          for (final e in d.entries) {
+            if (e.value is int) stamps[e.key as String] = e.value as int;
+          }
+        }
+      } catch (_) {
+        // 解码失败留空，条目仍可显示。
+      }
+    }
+    return stamps;
   }
 
   /// 解码照片 BLOB。脏数据（非列表、空）退回 null，不让界面崩溃。
