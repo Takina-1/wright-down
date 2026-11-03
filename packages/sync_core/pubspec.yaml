@@ -1,0 +1,10 @@
+name: sync_core
+description: "云同步共享纯逻辑包：字段级 LWW 合并、同步协议、鉴权/OSS 抽象。"
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ^3.13.7
+
+dev_dependencies:
+  test: ^1.25.0
