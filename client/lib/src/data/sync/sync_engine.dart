@@ -45,14 +45,14 @@ class SyncEngine {
     return r;
   }
 
-  /// 推一次：读全部未删条目，构批次推给服务端。成功后不清除 syncStamps
+  /// 推一次：读全部条目（含软删除条目，其 deletedAt 字段携带删除标记
+  /// 与 stamp），构批次推给服务端。成功后不清除 syncStamps
   /// （时间戳即「已同步」标记：服务端已含该戳的字段不会再被更旧的推覆盖）。
   Future<void> pushOnce() async {
     final me = await _me();
     if (me == null) return;
     final entries = await repository.exportAll();
     final patches = entries
-        .where((e) => !e.isDeleted)
         .map((e) => EntryPatch(
             id: e.id,
             createdAt: e.createdAt.millisecondsSinceEpoch,
