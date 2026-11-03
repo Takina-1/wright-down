@@ -11,6 +11,7 @@ dependencies:
   file_selector: ^1.1.0
   flutter:
     sdk: flutter
+  http: ^1.2.0
   path: ^1.9.1
   path_provider: ^2.1.6
   share_plus: ^13.3.1
