@@ -1,0 +1,16 @@
+name: server
+description: "云同步服务端：鉴权 + 同步接口（字段级 LWW 合并）。"
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  shelf: ^1.4.0
+  crypto: ^3.0.3
+  sync_core:
+    path: ../sync_core
+
+dev_dependencies:
+  test: ^1.25.0
