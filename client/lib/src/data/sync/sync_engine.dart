@@ -33,12 +33,14 @@ class SyncEngine {
     required this.repository,
     required this.remote,
     required this.auth,
+    required this.oss,
     required this.now,
   });
 
   final LocalEntryRepository repository;
   final SyncRemote remote;
   final AuthProvider auth;
+  final OSSGateway oss;
 
   // 预留给未来时间戳需求（如记录 lastSyncedAt）；当前触发循环与退避
   // 不读当前时间，故字段仍未被读取。
@@ -74,7 +76,31 @@ class SyncEngine {
   Future<void> pushOnce() async {
     final me = await _me();
     if (me == null) return;
-    final entries = await repository.exportAll();
+    var entries = await repository.exportAll();
+    // 照片上传：photo 有 BLOB 但无 photoKey 的条目，上传 OSS 并设 key。
+    // 用 saveMerged 保留既有 sync_stamps（含 photo 戳），避免 save 重算时间戳。
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      if (e.photo != null && e.photoKey == null) {
+        final key = await oss.upload(e.photo!);
+        final stamps = {...e.syncStamps, 'photo': now().millisecondsSinceEpoch};
+        final updated = Entry(
+          id: e.id,
+          content: e.content,
+          createdAt: e.createdAt,
+          updatedAt: e.updatedAt,
+          dayKey: e.dayKey,
+          deletedAt: e.deletedAt,
+          mood: e.mood,
+          tags: e.tags,
+          photo: e.photo,
+          photoKey: key,
+          syncStamps: stamps,
+        );
+        await repository.saveMerged(updated);
+        entries[i] = updated;
+      }
+    }
     final patches = entries
         .map((e) => EntryPatch(
             id: e.id,
@@ -100,10 +126,28 @@ class SyncEngine {
           break;
         }
       }
-      if (existing == null) {
-        await repository.saveMerged(_fromSyncEntry(remoteEntry));
-      } else {
-        await repository.saveMerged(applyRemote(existing, remoteEntry));
+      final merged = existing == null
+          ? _fromSyncEntry(remoteEntry)
+          : applyRemote(existing, remoteEntry);
+      await repository.saveMerged(merged);
+      // 照片下载：photoKey 有但本地 photo BLOB 缺失，从 OSS 下载缓存。
+      // 用 saveMerged 保留 photoKey 与 photo 戳（photo 是本地缓存不进 sync 字段）。
+      if (merged.photoKey != null && merged.photo == null) {
+        final bytes = await oss.download(merged.photoKey!);
+        final withPhoto = Entry(
+          id: merged.id,
+          content: merged.content,
+          createdAt: merged.createdAt,
+          updatedAt: merged.updatedAt,
+          dayKey: merged.dayKey,
+          deletedAt: merged.deletedAt,
+          mood: merged.mood,
+          tags: merged.tags,
+          photo: bytes,
+          photoKey: merged.photoKey,
+          syncStamps: merged.syncStamps,
+        );
+        await repository.saveMerged(withPhoto);
       }
     }
   }
@@ -206,6 +250,7 @@ class SyncEngine {
               fields['deletedAt']!.v as int, isUtc: true),
       mood: fields['mood']?.v as String?,
       tags: (fields['tags']?.v as List?)?.cast<String>() ?? const [],
+      photoKey: fields['photo']?.v as String?,
       syncStamps: fields.map((k, v) => MapEntry(k, v.t)),
     );
   }

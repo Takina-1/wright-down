@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/data/sync/sync_engine.dart';
+import 'package:local_diary/src/data/sync/fake_oss.dart';
 import 'package:local_diary/src/data/local/sqlite_entry_repository.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -81,6 +82,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
+        oss: FakeOSS(),
         now: () => DateTime.now(),
       );
       expect(engine.state, SyncState.idle);
@@ -115,6 +117,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
+        oss: FakeOSS(),
         now: () => DateTime.now(),
       );
       final sub = engine.stateChanged.listen((_) {});
@@ -135,6 +138,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
+        oss: FakeOSS(),
         now: () => DateTime.now(),
       );
       engine.start();
@@ -154,6 +158,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
+        oss: FakeOSS(),
         now: () => DateTime.now(),
       );
       engine.start();
@@ -178,6 +183,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
+        oss: FakeOSS(),
         now: () => DateTime.now(),
       );
       await repo.save(Entry(
