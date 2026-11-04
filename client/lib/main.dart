@@ -5,14 +5,12 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sync_core/sync_core.dart';
 
 import 'app.dart';
+import 'src/config/sync_config.dart';
 import 'src/data/local/sqlite_entry_repository.dart';
 import 'src/data/remote/email_password_provider.dart';
 import 'src/data/remote/remote_repo.dart';
 import 'src/data/sync/fake_oss.dart';
 import 'src/data/sync/sync_engine.dart';
-
-/// 同步服务端基址：Android 模拟器访问宿主机（10.0.2.2 映射到本机）的 8080 端口。
-const String kSyncBaseUrl = 'http://10.0.2.2:8080';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,14 +31,15 @@ class _StartupState extends State<_Startup> {
       path: path.join(await getDatabasesPath(), 'local_diary.db'),
     );
     final httpClient = http.Client();
+    final baseUrl = syncBaseUrl();
     final auth = EmailPasswordProvider(
       httpClient,
-      kSyncBaseUrl,
+      baseUrl,
       InMemoryTokenStore(),
     );
     final engine = SyncEngine(
       repository: repository,
-      remote: RemoteRepo(httpClient, kSyncBaseUrl, const SyncCodec()),
+      remote: RemoteRepo(httpClient, baseUrl, const SyncCodec()),
       auth: auth,
       // FakeOSS 是开发期占位实现（本地临时目录）；真机 OSS 直传网关待后续
       // Part 接入后替换。
