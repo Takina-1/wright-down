@@ -38,6 +38,24 @@ void main() {
       expect(r.statusCode, 401);
     });
 
+    test('register 超长密码返回 400', () async {
+      final store = FakeSyncStore();
+      final h = registerHandler(store);
+      final r = await h(_req('POST', '/auth/register',
+          body: '{"email":"a@b.com","password":"${'a' * 73}"}'));
+      expect(r.statusCode, 400);
+    });
+
+    test('login 超长密码返回 400', () async {
+      final store = FakeSyncStore();
+      final h = loginHandler(store);
+      // 邮箱不存在时 login 内 hashPassword 直接抛 ArgumentError，
+      // handler 捕获后返回 400。
+      final r = await h(_req('POST', '/auth/login',
+          body: '{"email":"nobody@b.com","password":"${'a' * 73}"}'));
+      expect(r.statusCode, 400);
+    });
+
     test('pull 需要鉴权：无 token 返回 401', () async {
       final store = FakeSyncStore();
       final h = pullHandler(store);

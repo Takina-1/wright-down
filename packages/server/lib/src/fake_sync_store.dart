@@ -3,11 +3,10 @@ import 'password.dart';
 import 'sync_store.dart';
 
 class _User {
-  _User(this.userId, this.email, this.hash, this.salt);
+  _User(this.userId, this.email, this.hash);
   final String userId;
   final String email;
   final String hash;
-  final String salt;
 }
 
 class _Entry {
@@ -29,11 +28,10 @@ class FakeSyncStore implements SyncStore {
   @override
   Future<AuthResult> register(String email, String password) async {
     if (_users.containsKey(email)) {
-      throw StateError('Email already registered');
+      throw StateError('email already registered');
     }
-    final salt = newSalt();
     final userId = 'u${_seq++}';
-    _users[email] = _User(userId, email, hashPassword(password, salt), salt);
+    _users[email] = _User(userId, email, hashPassword(password));
     final token = newToken();
     _tokens[token] = userId;
     return AuthResult(userId: userId, token: token);
@@ -42,8 +40,12 @@ class FakeSyncStore implements SyncStore {
   @override
   Future<AuthResult?> login(String email, String password) async {
     final u = _users[email];
-    if (u == null) return null;
-    if (hashPassword(password, u.salt) != u.hash) return null;
+    if (u == null) {
+      // 对不存在的邮箱同样执行一次 bcrypt，使响应耗时与"密码错误"不可区分。
+      hashPassword(password);
+      return null;
+    }
+    if (!verifyPassword(password, u.hash)) return null;
     final token = newToken();
     _tokens[token] = u.userId;
     return AuthResult(userId: u.userId, token: token);

@@ -30,6 +30,8 @@ Handler registerHandler(SyncStore store) => (req) async {
     return _okJson({'userId': r.userId, 'token': r.token});
   } on StateError catch (_) {
     return _err(409, 'email already registered');
+  } on ArgumentError catch (_) {
+    return _err(400, 'password too long');
   }
 };
 
@@ -37,9 +39,13 @@ Handler loginHandler(SyncStore store) => (req) async {
   final j = await _json(req);
   final email = j['email'] as String;
   final password = j['password'] as String;
-  final r = await store.login(email, password);
-  if (r == null) return _err(401, 'invalid credentials');
-  return _okJson({'userId': r.userId, 'token': r.token});
+  try {
+    final r = await store.login(email, password);
+    if (r == null) return _err(401, 'invalid credentials');
+    return _okJson({'userId': r.userId, 'token': r.token});
+  } on ArgumentError catch (_) {
+    return _err(400, 'password too long');
+  }
 };
 
 Handler pullHandler(SyncStore store) => (req) async {
