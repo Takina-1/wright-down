@@ -791,7 +791,7 @@ void main() {
 
 - [ ] **Step 2: 运行测试确认失败**
 
-Run: `cd client && flutter test test/config/sync_config_test.dart`
+Run: `cd client && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 test test/config/sync_config_test.dart`
 Expected: FAIL —— `sync_config.dart` 不存在
 
 - [ ] **Step 3: 实现基址解析**
@@ -811,7 +811,7 @@ String syncBaseUrl() => const String.fromEnvironment(
 
 - [ ] **Step 4: 运行测试确认通过**
 
-Run: `cd client && flutter test test/config/sync_config_test.dart`
+Run: `cd client && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 test test/config/sync_config_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: 改 `client/lib/main.dart` 使用解析函数**
@@ -876,13 +876,13 @@ cp deploy/certs/ca.crt client/android/app/src/main/res/raw/diary_ca.crt
 
 - [ ] **Step 9: 静态检查与测试**
 
-Run: `cd client && flutter analyze && flutter test`
+Run: `cd client && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 analyze && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 test`
 Expected: analyze 无问题；全部测试通过
 
 - [ ] **Step 10: 构建 release APK 验证配置生效**
 
 ```bash
-cd client && flutter build apk --release --dart-define=SYNC_BASE_URL=https://8.148.158.13
+cd client && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 build apk --release --dart-define=SYNC_BASE_URL=https://8.148.158.13
 ```
 
 Expected: 构建成功，产物 `build/app/outputs/flutter-apk/app-release.apk`
@@ -1209,7 +1209,7 @@ Expected: `443 OPEN`、`8080 closed`
 - [ ] **Step 1: 构建并安装 APK**
 
 ```bash
-cd client && flutter build apk --release --dart-define=SYNC_BASE_URL=https://8.148.158.13
+cd client && powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/flutter.ps1 build apk --release --dart-define=SYNC_BASE_URL=https://8.148.158.13
 .tooling/android-sdk/platform-tools/adb.exe install -r client/build/app/outputs/flutter-apk/app-release.apk
 ```
 
