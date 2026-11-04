@@ -100,15 +100,16 @@ C2 内容：
 
 ```xml
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/diary_ca" />
+        </trust-anchors>
+    </base-config>
     <domain-config cleartextTrafficPermitted="true">
         <!-- 安卓模拟器访问宿主机的别名，仅开发用 -->
         <domain includeSubdomains="false">10.0.2.2</domain>
     </domain-config>
-    <certificates>
-        <certificates src="system" />
-        <certificates src="@raw/diary_ca" />
-    </certificates>
 </network-security-config>
 ```
 
@@ -837,19 +838,18 @@ Expected: PASS
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- 生产环境全程禁明文 -->
-    <base-config cleartextTrafficPermitted="false" />
+    <!-- 生产环境全程禁明文；系统 CA 与自签 CA 并列：只追加自签，不顶掉系统信任库 -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/diary_ca" />
+        </trust-anchors>
+    </base-config>
 
     <!-- 安卓模拟器访问宿主机的别名，仅开发用 -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">10.0.2.2</domain>
     </domain-config>
-
-    <!-- 系统 CA 与自签 CA 并列：只追加自签，不顶掉系统信任库 -->
-    <certificates>
-        <certificates src="system" />
-        <certificates src="@raw/diary_ca" />
-    </certificates>
 </network-security-config>
 ```
 
