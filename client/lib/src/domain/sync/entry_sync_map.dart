@@ -13,6 +13,9 @@ SyncEntry toSyncEntry(Entry e) {
   put('mood', e.mood, e.syncStamps['mood'] ?? 0);
   put('tags', e.tags, e.syncStamps['tags'] ?? 0);
   put('deletedAt', e.deletedAt?.millisecondsSinceEpoch, e.syncStamps['deletedAt'] ?? 0);
+  // photo：photoKey!=null 时输出 key；photoKey==null 但 stamp>0（曾设照片后清除）
+  // 输出 FieldValue(null, stamp) 表示「无照片」删除语义。
+  put('photo', e.photoKey, e.syncStamps['photo'] ?? 0);
   return SyncEntry(id: e.id, createdAt: e.createdAt.millisecondsSinceEpoch, fields: fields);
 }
 
@@ -26,6 +29,7 @@ Entry applyRemote(Entry local, SyncEntry remote) {
   String? mood = local.mood;
   List<String> tags = local.tags;
   int? deletedAt = local.deletedAt?.millisecondsSinceEpoch;
+  String? photoKey = local.photoKey;
 
   for (final f in remote.fields.entries) {
     final t = f.value.t;
@@ -41,6 +45,9 @@ Entry applyRemote(Entry local, SyncEntry remote) {
     } else if (f.key == 'deletedAt' && t >= (local.syncStamps['deletedAt'] ?? 0)) {
       deletedAt = f.value.v as int?;
       stamps['deletedAt'] = t;
+    } else if (f.key == 'photo' && t >= (local.syncStamps['photo'] ?? 0)) {
+      photoKey = f.value.v as String?;
+      stamps['photo'] = t;
     }
   }
 
@@ -54,6 +61,7 @@ Entry applyRemote(Entry local, SyncEntry remote) {
     mood: mood,
     tags: tags,
     photo: local.photo,
+    photoKey: photoKey,
     syncStamps: stamps,
   );
 }
