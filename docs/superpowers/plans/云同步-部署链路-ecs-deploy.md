@@ -1,6 +1,6 @@
 # F013 云同步实现计划 · Part 5：ECS 部署链路
 
-**Goal:** 把 F013 服务端部署到广州 ECS（`i-7xv4buzm47fxdask0bgz`），用真机 + curl 模拟第二设备跑通「客户端 → nginx TLS → Dart 服务 → 存储」的完整链路。
+**Goal:** 把 F013 服务端部署到广州 ECS（`i-7xv4buzm47fxdask0bgz`），用真机 + curl 模拟第二设备跑通「客户端 → nginx TLS → Dart 服务 → 存储」的完整链路；同时把口令哈希从 `sha256(salt+password)` 换成 bcrypt。
 
 **状态：** 设计已确认，待实现。
 
@@ -14,6 +14,7 @@
 
 - 服务端代码部署到 ECS：编译 → systemd → nginx TLS
 - 客户端指向真实服务器：证书信任、INTERNET 权限、服务器地址注入
+- **bcrypt 密码哈希**替换 `sha256(salt+password)`
 - 真机验证：安装 APK、登录、写日记、推送；用 curl 充当第二设备拉取确认
 - 产出可复用的部署脚本与证书签发脚本
 
@@ -22,7 +23,6 @@
 | 项 | 影响 |
 | --- | --- |
 | PostgresSyncStore | 服务端仍用 FakeSyncStore（内存），数据库空置 |
-| bcrypt 密码哈希 | 仍是 `sha256(salt+password)`，**上生产前必须换** |
 | Token 过期/刷新 | AC-08 未实现，token 永久有效 |
 | 真机阿里云 OSS | 照片走 FakeOSS（本地文件系统） |
 | 跨设备真机同步 | 需第二台 Android 设备 |
@@ -45,6 +45,7 @@
 | D4 | nginx 与 Dart 服务 | 分开管理 | 两者是独立进程与独立 systemd 单元，nginx 重启/升级不影响 Dart 服务，反之亦然 |
 | D5 | 代码投递 | 服务器 `git pull`（HTTPS 匿名，已实测可达） | 可追溯到 commit、可回滚；打包上传留作兜底 |
 | D6 | 编译位置 | 服务器上 `dart compile exe` | Dart 不支持交叉编译；目标机已装 SDK，实测编译耗时 3.5 s、产物 7.2 MB |
+| D7 | 密码哈希 | `bcrypt` 1.2.0，cost **10**，前缀 `$2b` | 纯 Dart（无 `dart:ffi`），实测可 AOT 编译；cost 10 单次 106 ms。选 `$2b` 是修正 `$2a` 的高位字符符号扩展缺陷 |
 
 ---
 
@@ -106,8 +107,45 @@ C2 内容：
 | --- | --- | --- |
 | S1 | `packages/server/lib/src/main.dart` | `serve(createApp(store), '0.0.0.0', 8080)` → `'127.0.0.1'`；端口读 `PORT` 环境变量，默认 8080 |
 | S2 | `packages/server/bin/server.dart` | 新建 package 入口。`dart compile exe lib/src/main.dart` 虽可运行，但 `lib/src` 属私有目录，不应对外暴露 |
+| S3 | `packages/server/lib/src/password.dart` | 换 bcrypt，见第 5.1 节 |
+| S4 | `packages/server/lib/src/fake_sync_store.dart` | 改用 `hashPassword` / `verifyPassword`；登录时对不存在的邮箱也跑一次 bcrypt（见 5.2） |
+| S5 | `packages/server/pubspec.yaml` | 增 `bcrypt: ^1.2.0`；移除 `crypto: ^3.0.3`（仅 sha256 用到；`newToken()` 走 `Random.secure()`） |
 
 `packages/server/pubspec.yaml` 本轮**不新增** `postgres` 依赖（用 FakeSyncStore）。
+
+### 5.1 密码哈希改 bcrypt
+
+实测（在目标机 2 vCPU 上跑真实尖刺）：
+
+| 项 | 结果 |
+| --- | --- |
+| 包 | `bcrypt` 1.2.0，**纯 Dart**（无 `dart:ffi`） |
+| `dart compile exe` | 成功，产物 6.4 MB |
+| cost 8 / 10 / 12 | 26 ms / **106 ms** / 425 ms |
+| 密码 > 72 字节 | 抛 `ArgumentError`（非静默截断） |
+| 前缀 | `$2b` |
+
+API 变更：
+
+```dart
+/// bcrypt 哈希，salt 内嵌于返回值（$2b$10$<salt><hash>）。
+String hashPassword(String password);
+
+/// 校验密码；哈希格式非法或密码超 72 字节时返回 false。
+bool verifyPassword(String password, String hash);
+```
+
+- 删除 `newSalt()`——bcrypt 的 salt 本就内嵌在哈希串里
+- `newToken()` 保留不动
+
+### 5.2 业务层处理
+
+1. **超 72 字节**：捕获 `ArgumentError`，转成 400 友好提示，不得漏成 500
+2. **登录时邮箱不存在也要跑一次 bcrypt 再返回失败**：否则登录响应时间差异可枚举出哪些邮箱已注册。代价是「查不存在的邮箱」也需 106 ms，属有意为之
+
+### 5.3 schema 变更
+
+`users.salt` 列删除——bcrypt 下该列无意义。生产库当前 **0 个用户**，无迁移负担，直接 `DROP TABLE` 重建后重跑 `deploy/sql/schema.sql`。
 
 ---
 
@@ -157,6 +195,9 @@ nginx **不另建 systemd 单元**——`postgresql`/`nginx` 等软件包已自�
 | DP-06 | 真机推送 | 真机写一篇日记并触发推送，服务端能查到该条目 |
 | DP-07 | curl 充当第二设备 | 用真机 token 从服务端 pull，能拉到真机刚写的日记，cursor 正确推进 |
 | DP-08 | 模拟器开发不受影响 | 未注入 `SYNC_BASE_URL` 时，模拟器仍能连 `http://10.0.2.2:8080` |
+| DP-09 | bcrypt 落库 | 注册后 `users.password_hash` 为 `$2b$10$` 开头、60 字符的 bcrypt 串；`users` 表无 `salt` 列 |
+| DP-10 | 超长密码被拒 | 超过 72 字节的密码注册返回 400，不出现 500，也不截断后入库 |
+| DP-11 | 登录与时序防护 | 用 bcrypt 串登录成功、错误密码失败；不存在的邮箱与错误密码的响应耗时无显著差异 |
 
 DP-05 用 release 构建验证而非 debug——自签 CA 方案的意义就是 release 也能连，debug 放行明文反而验证不到 CA 信任链。
 
@@ -169,6 +210,7 @@ DP-05 用 release 构建验证而非 debug——自签 CA 方案的意义就是 
 | 风险 | 影响 | 处置 |
 | --- | --- | --- |
 | FakeSyncStore 内存存储 | 重启丢全部数据 | 本轮已知代价，写入测试报告；下轮换 PostgresSyncStore |
-| 客户端 token 无过期 | token 泄露长期有效 | 本轮延后项；服务端 bcrypt/token 刷新一并无 |
+| 客户端 token 无过期 | token 泄露长期有效 | 本轮延后项，与 token 刷新一并无 |
 | 服务器证书绑死 IP | IP 变更需重签并更新 App | 签发脚本支持域名；如需固定入口可后续接域名 + 正式证书 |
-| `sha256(salt+password)` | 口令可被快速爆破 | **正式开放给用户前必须换 bcrypt/argon2** |
+| bcrypt 纯 Dart 性能 | 单次 106 ms，登录接口可接受；成本约原生实现的 5 倍 | 已实测；该机 2 vCPU 下仍有余量。若将来成本压测不达标，可换 `crypt` 包绑系统 libxcrypt（需随包分发 .so） |
+| 客户端 release 用 debug keys 签名 | APK 不可上架 | 正式发布前配置真实签名，本轮验证不受影响 |
