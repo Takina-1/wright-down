@@ -78,9 +78,9 @@ class SyncEngine {
         }
       }
       if (existing == null) {
-        await repository.save(_fromSyncEntry(remoteEntry));
+        await repository.saveMerged(_fromSyncEntry(remoteEntry));
       } else {
-        await repository.save(applyRemote(existing, remoteEntry));
+        await repository.saveMerged(applyRemote(existing, remoteEntry));
       }
     }
   }

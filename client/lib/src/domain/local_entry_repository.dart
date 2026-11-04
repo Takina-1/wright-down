@@ -4,6 +4,11 @@ import 'export/import_summary.dart';
 abstract interface class LocalEntryRepository {
   Future<void> save(Entry entry);
 
+  /// 同步合并用：写入条目并**原样保留**传入的 syncStamps（不重算），
+  /// updated_at 取 max(now, e.updatedAt)。pull 合并后的条目用本方法，
+  /// 避免 save 重算时间戳破坏「字段最后同步时间」不变量（M-16）。
+  Future<void> saveMerged(Entry entry);
+
   /// 时间轴列表：只含未删除条目，按创建时间倒序。
   ///
   /// [tag] 传入时只返回带该标签的条目（标签匹配按 JSON 数组里的引号子串，

@@ -185,6 +185,71 @@ class SqliteEntryRepository implements LocalEntryRepository {
   }
 
   @override
+  Future<void> saveMerged(Entry entry) async {
+    if (entry.id.isEmpty || entry.content.trim().isEmpty) {
+      throw ArgumentError('An entry needs an id and non-empty content');
+    }
+    final db = await _database();
+    final deletedAt = entry.deletedAt;
+    final mood = entry.mood;
+    // tags 存 JSON 数组字符串；空列表存 '[]'，避免 NULL 与空串混淆。
+    final tagsJson = jsonEncode(entry.tags);
+    // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
+    // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
+    final photo = entry.photo;
+    // 版本戳只许增不许减：取 now 与 e.updatedAt 的较大者，设备时钟回拨时
+    // 不让 updated_at 倒退。与 softDelete/restore 的口径一致。
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final stamp = entry.updatedAt.millisecondsSinceEpoch > now
+        ? entry.updatedAt.millisecondsSinceEpoch
+        : now;
+    // sync_stamps 原样保留传入的字段级时间戳（jsonEncode，不重算）。
+    // pull 合并后的条目字段时间戳取自远端 t，save 的 _computeStamps 会用
+    // updatedAt 重算覆盖这些远端戳，破坏「字段最后同步时间」不变量（M-16）。
+    final stampsJson = jsonEncode(entry.syncStamps);
+    await db.transaction((txn) async {
+      final updated = await txn.update(
+        'entries',
+        {
+          'content': entry.content,
+          'updated_at': stamp,
+          // 删除标记只在显式带上时才写：与 save 同口径，编辑已软删除条目时
+          // 库里的删除标记必须留着，否则条目会被无声复活回到时间轴。
+          if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
+          // mood 采用 always-write 口径：与 save 同口径，传入 mood 为 null
+          // 即清除库中已有的心情（AC-07）。
+          'mood': mood,
+          // tags 同样 always-write：传入空列表即清除库中已有标签。
+          'tags': tagsJson,
+          // photo 同样 always-write：传入 null 即清除库中已有照片。
+          'photo': photo,
+          // sync_stamps 原样保留调用方传入的字段级时间戳（pull 远端 t）。
+          'sync_stamps': stampsJson,
+        },
+        where: 'id = ?',
+        whereArgs: [entry.id],
+      );
+      if (updated == 0) {
+        await txn.insert('entries', {
+          'id': entry.id,
+          'content': entry.content,
+          'created_at': entry.createdAt.millisecondsSinceEpoch,
+          'updated_at': stamp,
+          'day_key': entry.dayKey,
+          if (deletedAt != null) 'deleted_at': deletedAt.millisecondsSinceEpoch,
+          // mood 总是写：与 update 分支同口径，null 即不写心情。
+          'mood': mood,
+          'tags': tagsJson,
+          // photo 总是写：与 update 分支同口径，null 即不写照片。
+          'photo': photo,
+          // 新建条目的 sync_stamps 同样原样保留传入值（pull 新建走远端 t）。
+          'sync_stamps': stampsJson,
+        });
+      }
+    });
+  }
+
+  @override
   Future<List<Entry>> list({EntryCursor? before, String? tag, int limit = 30}) async {
     if (limit < 1) throw ArgumentError.value(limit, 'limit');
     final db = await _database();

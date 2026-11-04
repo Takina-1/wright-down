@@ -76,6 +76,47 @@ class MemoryRepository implements LocalEntryRepository {
   }
 
   @override
+  Future<void> saveMerged(Entry entry) async {
+    // 与生产实现口径一致：ID 为空或正文为空的条目一律拒绝，且校验发生在
+    // 一切副作用之前。
+    if (entry.id.isEmpty || entry.content.trim().isEmpty) {
+      throw ArgumentError('An entry needs an id and non-empty content');
+    }
+    saves++;
+    final waitFor = gate;
+    if (waitFor != null) await waitFor.future;
+    if (failSave) throw StateError('simulated disk failure');
+    final existing = entries[entry.id];
+    if (existing == null) {
+      // 新建条目：原样保留传入的 syncStamps（pull 新建走远端字段 t）。
+      entries[entry.id] = entry;
+      return;
+    }
+    // 更新分支：与 save 同口径（createdAt/dayKey/deletedAt 沿用库中已有值，
+    // mood/tags/photo always-write），但 syncStamps 原样保留传入值（不重算），
+    // updatedAt 取 max(now, e.updatedAt) 保证版本戳只增不减（与生产
+    // saveMerged 一致）。避免 pull 合并时字段时间戳被覆盖（M-16）。
+    final now = _now().toUtc();
+    final stamp = entry.updatedAt.millisecondsSinceEpoch >
+            now.millisecondsSinceEpoch
+        ? DateTime.fromMillisecondsSinceEpoch(
+            entry.updatedAt.millisecondsSinceEpoch, isUtc: true)
+        : now;
+    entries[entry.id] = Entry(
+      id: existing.id,
+      content: entry.content,
+      createdAt: existing.createdAt,
+      updatedAt: stamp,
+      dayKey: existing.dayKey,
+      deletedAt: entry.deletedAt ?? existing.deletedAt,
+      mood: entry.mood,
+      tags: entry.tags,
+      photo: entry.photo,
+      syncStamps: entry.syncStamps,
+    );
+  }
+
+  @override
   Future<List<Entry>> list({EntryCursor? before, String? tag, int limit = 30}) async {
     if (limit < 1) throw ArgumentError.value(limit, 'limit');
     if (failList) throw StateError('simulated read failure');
