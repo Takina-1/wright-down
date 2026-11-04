@@ -56,6 +56,17 @@ void main() {
       expect(r.statusCode, 400);
     });
 
+    test('login 已注册邮箱超长密码返回 400', () async {
+      final store = FakeSyncStore();
+      await store.register('a@b.com', 'pw');
+      final h = loginHandler(store);
+      // 已注册邮箱 + 超长密码：login 的 pre-check 抛 ArgumentError，
+      // handler 捕获后返回 400，与未注册邮箱路径一致。
+      final r = await h(_req('POST', '/auth/login',
+          body: '{"email":"a@b.com","password":"${'a' * 73}"}'));
+      expect(r.statusCode, 400);
+    });
+
     test('pull 需要鉴权：无 token 返回 401', () async {
       final store = FakeSyncStore();
       final h = pullHandler(store);

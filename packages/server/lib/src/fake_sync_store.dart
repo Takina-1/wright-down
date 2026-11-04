@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sync_core/sync_core.dart';
 import 'password.dart';
 import 'sync_store.dart';
@@ -42,8 +44,11 @@ class FakeSyncStore implements SyncStore {
     final u = _users[email];
     if (u == null) {
       // 对不存在的邮箱同样执行一次 bcrypt，使响应耗时与"密码错误"不可区分。
-      hashPassword(password);
+      hashPassword(password);  // throws ArgumentError for >72 bytes
       return null;
+    }
+    if (utf8.encode(password).length > kMaxPasswordBytes) {
+      throw ArgumentError('password too long');
     }
     if (!verifyPassword(password, u.hash)) return null;
     final token = newToken();
