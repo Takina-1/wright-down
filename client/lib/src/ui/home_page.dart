@@ -9,16 +9,26 @@ import '../domain/entry.dart';
 import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import '../domain/mood.dart';
+import '../data/sync/sync_engine.dart';
 import 'entry_editor_controller.dart';
 import 'local_data_page.dart';
+import 'sync/sync_status_indicator.dart';
 import 'timeline_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.repository, this.fileGateway});
+  const HomePage({
+    super.key,
+    required this.repository,
+    this.fileGateway,
+    this.syncEngine,
+  });
   final LocalEntryRepository repository;
 
   /// 文件出口。默认用系统实现，测试可以注入替身。
   final FileGateway? fileGateway;
+
+  /// 同步引擎。为空时 composer 不显示同步状态、flush 不触发推送、前台不触发拉取。
+  final SyncEngine? syncEngine;
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -71,8 +81,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
-      unawaited(_editor.flush());
+      // 退到后台/失焦前落盘，落盘成功后触发一次推送（防抖合并多次写入）。
+      unawaited(_flushAndPush());
+    } else if (state == AppLifecycleState.resumed) {
+      // 回到前台拉一次远端变更；未登录时 triggerPull 内部 _me() 返回 null 提前退出。
+      final engine = widget.syncEngine;
+      if (engine != null) unawaited(engine.triggerPull());
     }
+  }
+
+  /// 落盘并触发推送：flush 成功才 triggerPush（失败的写入不推）。
+  ///
+  /// triggerPush 自身 30 秒防抖，多次调用会合并为一次往返，故在
+  /// _selectTab/_exit/后台落盘三处复用本方法无需额外节流。
+  Future<bool> _flushAndPush() async {
+    final saved = await _editor.flush();
+    if (saved) widget.syncEngine?.triggerPush();
+    return saved;
   }
 
   Future<void> _selectTab(int tab) async {
@@ -80,7 +105,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _transitioning = true;
     });
-    final saved = await _editor.flush();
+    final saved = await _flushAndPush();
     if (!mounted) return;
     setState(() {
       _transitioning = false;
@@ -311,7 +336,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _transitioning = true;
     });
-    final saved = await _editor.flush();
+    final saved = await _flushAndPush();
     if (!mounted) return;
     if (saved) {
       await SystemNavigator.pop();
@@ -373,6 +398,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _ => LocalDataPage(
             repository: widget.repository,
             fileGateway: widget.fileGateway,
+            syncEngine: widget.syncEngine,
+            auth: widget.syncEngine?.auth,
           ),
         },
       ),
@@ -434,6 +461,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Icons.spa_outlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
+              if (widget.syncEngine != null)
+                StreamBuilder<SyncState>(
+                  stream: widget.syncEngine!.stateChanged,
+                  initialData: widget.syncEngine!.state,
+                  builder: (context, snapshot) => SyncStatusIndicator(
+                    state: snapshot.data ?? SyncState.idle,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -564,7 +599,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             TextButton(
-              onPressed: _transitioning ? null : () => _editor.flush(),
+              onPressed: _transitioning ? null : () => unawaited(_flushAndPush()),
               child: const Text('重试保存'),
             ),
           ],

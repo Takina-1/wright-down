@@ -5,6 +5,7 @@ import 'package:sync_core/sync_core.dart';
 
 import '../../data/sync/sync_engine.dart';
 import '../../domain/local_entry_repository.dart';
+import 'sync_status_indicator.dart';
 import 'login_page.dart';
 
 /// 「我的」页顶部的账号卡。
@@ -150,24 +151,6 @@ class _AccountCardState extends State<AccountCard> {
   }
 
   Widget _syncStateRow(BuildContext context) {
-    final icon = switch (_sync) {
-      SyncState.syncing => Icons.sync,
-      SyncState.synced => Icons.check_circle_outline,
-      SyncState.failed => Icons.warning_amber_outlined,
-      SyncState.idle => Icons.sync,
-    };
-    final label = switch (_sync) {
-      SyncState.syncing => '同步中',
-      SyncState.synced => '已同步',
-      SyncState.failed => '同步失败',
-      SyncState.idle => '等待同步',
-    };
-    return Row(
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
-    );
+    return SyncStatusIndicator(state: _sync);
   }
 }

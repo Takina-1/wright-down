@@ -10,6 +10,20 @@ abstract interface class TokenStore {
   Future<void> write(String? token);
 }
 
+/// 内存 token 存储：进程内保存登录态。
+///
+/// 最小实现，用于打通接线与测试；真机持久化（SharedPreferences）
+/// 是后续 Task。进程重启后 token 丢失，需重新登录。
+class InMemoryTokenStore implements TokenStore {
+  String? _token;
+  @override
+  Future<String?> read() async => _token;
+  @override
+  Future<void> write(String? token) async {
+    _token = token;
+  }
+}
+
 /// 邮箱密码鉴权：基于 [RemoteRepo] 实现 [AuthProvider]，token 经 [TokenStore] 持久化。
 class EmailPasswordProvider implements AuthProvider {
   EmailPasswordProvider(this.client, this.baseUrl, this.tokenStore, {this.handler});
