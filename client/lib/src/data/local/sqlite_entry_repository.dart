@@ -19,7 +19,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
       return await (_databaseFuture ??= factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 6,
+          version: 7,
           onConfigure: (db) async {
             await db.rawQuery('PRAGMA journal_mode = WAL');
             await db.execute('PRAGMA busy_timeout = 5000');
@@ -35,6 +35,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
               mood TEXT,
               tags TEXT,
               photo BLOB,
+              photo_key TEXT,
               sync_stamps TEXT
             )''');
             await db.execute(
@@ -99,6 +100,17 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 await db.execute('ALTER TABLE entries ADD COLUMN sync_stamps TEXT');
               }
             }
+            if (oldVersion < 7) {
+              // F013 Part4 的 photo_key 迁移同样幂等：用户若用旧版打开过，
+              // 列可能已在。photo_key 存照片 OSS key（String?），是跨设备同步
+              // 字段；BLOB photo 列留本地不同步，不在此迁移范围。
+              final columns = await db.rawQuery('PRAGMA table_info(entries)');
+              final hasPhotoKey =
+                  columns.any((row) => row['name'] == 'photo_key');
+              if (!hasPhotoKey) {
+                await db.execute('ALTER TABLE entries ADD COLUMN photo_key TEXT');
+              }
+            }
           },
         ),
       ));
@@ -121,6 +133,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
     // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
     // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
     final photo = entry.photo;
+    // photoKey 存 OSS key（TEXT）：null 即清除已有 key。
+    final photoKey = entry.photoKey;
     // 字段级时间戳取 entry.updatedAt（逻辑更新时间），而非 DateTime.now()
     // （物理保存时间）。离线编辑时调用方把 updatedAt 设为编辑时刻，
     // 上线同步时另一设备可能已有更新的字段；用 updatedAt 打戳才能让
@@ -157,6 +171,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 同样 always-write：传入 null 即清除库中已有照片。
           'photo': photo,
+          // photoKey 同样 always-write：传入 null 即清除库中已有 key。
+          'photo_key': photoKey,
           // sync_stamps 跟字段走：变更字段打 now，未变更字段保留旧戳，
           // deletedAt 由 softDelete/restore 维护，save 不碰。
           'sync_stamps': stampsJson,
@@ -177,6 +193,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 总是写：与 update 分支同口径，null 即不写照片。
           'photo': photo,
+          // photoKey 总是写：与 update 分支同口径，null 即不写 key。
+          'photo_key': photoKey,
           // 新建条目所有字段打 now。
           'sync_stamps': stampsJson,
         });
@@ -197,6 +215,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
     // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
     // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
     final photo = entry.photo;
+    // photoKey 存 OSS key（TEXT）：null 即清除已有 key。
+    final photoKey = entry.photoKey;
     // 版本戳只许增不许减：取 now 与 e.updatedAt 的较大者，设备时钟回拨时
     // 不让 updated_at 倒退。与 softDelete/restore 的口径一致。
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -223,6 +243,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 同样 always-write：传入 null 即清除库中已有照片。
           'photo': photo,
+          // photoKey 同样 always-write：传入 null 即清除库中已有 key。
+          'photo_key': photoKey,
           // sync_stamps 原样保留调用方传入的字段级时间戳（pull 远端 t）。
           'sync_stamps': stampsJson,
         },
@@ -242,6 +264,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
           'tags': tagsJson,
           // photo 总是写：与 update 分支同口径，null 即不写照片。
           'photo': photo,
+          // photoKey 总是写：与 update 分支同口径，null 即不写 key。
+          'photo_key': photoKey,
           // 新建条目的 sync_stamps 同样原样保留传入值（pull 新建走远端 t）。
           'sync_stamps': stampsJson,
         });
@@ -444,6 +468,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
               'tags': jsonEncode(decision.entry.tags),
               // 插入时带上照片：存 BLOB（Uint8List），null 即不带照片。
               'photo': decision.entry.photo,
+              // 插入时带上照片 OSS key：存 TEXT，null 即不带 key。
+              'photo_key': decision.entry.photoKey,
             });
             inserted++;
           case MergeAction.update:
@@ -463,6 +489,8 @@ class SqliteEntryRepository implements LocalEntryRepository {
                 'tags': jsonEncode(decision.entry.tags),
                 // photo 跟 updatedAt 走：备份带照片用备份的，备份不带照片清空本地照片。
                 'photo': decision.entry.photo,
+                // photoKey 跟 updatedAt 走：备份带 key 用备份的，备份不带 key 清空本地 key。
+                'photo_key': decision.entry.photoKey,
               },
               where: 'id = ?',
               whereArgs: [entry.id],
@@ -517,13 +545,14 @@ class SqliteEntryRepository implements LocalEntryRepository {
       mood: mood,
       tags: tags,
       photo: _decodePhoto(row['photo']),
+      photoKey: row['photo_key'] as String?,
       syncStamps: _decodeStamps(row['sync_stamps']),
     );
   }
 
   /// 计算字段级同步时间戳。对已存在条目，只给值变更的字段打 now，未变更字段
-  /// 保留旧戳；对新建条目，content/mood/tags 全部打 now。deletedAt 由
-  /// softDelete/restore 维护，save 不碰。
+  /// 保留旧戳；对新建条目，content/mood/tags 全部打 now（photoKey 仅在非空
+  /// 时打戳，null==null 不打）。deletedAt 由 softDelete/restore 维护，save 不碰。
   Map<String, int> _computeStamps(Entry? existing, Entry e, int now) {
     final old = existing?.syncStamps ?? const {};
     final stamps = <String, int>{...old};
@@ -533,6 +562,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     bump('content', e.content, existing?.content);
     bump('mood', e.mood, existing?.mood);
     bump('tags', e.tags, existing?.tags);
+    bump('photo', e.photoKey, existing?.photoKey);
     return stamps;
   }
 
