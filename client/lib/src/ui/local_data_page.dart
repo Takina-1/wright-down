@@ -1,18 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:sync_core/sync_core.dart';
 
+import '../data/sync/sync_engine.dart';
 import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import '../platform/saf_file_gateway.dart';
 import 'export_page.dart';
 import 'stats_page.dart';
+import 'sync/account_card.dart';
 import 'trash_page.dart';
 
 class LocalDataPage extends StatelessWidget {
-  const LocalDataPage({super.key, required this.repository, this.fileGateway});
+  const LocalDataPage({
+    super.key,
+    required this.repository,
+    this.fileGateway,
+    this.auth,
+    this.syncEngine,
+  });
   final LocalEntryRepository repository;
 
   /// 文件出口。为空时用系统实现，测试可以注入替身。
   final FileGateway? fileGateway;
+
+  /// 鉴权提供方。为空时不显示账号卡（保持纯本地模式）。
+  final AuthProvider? auth;
+
+  /// 同步引擎。传给账号卡用于显示同步状态与登录后的认领推送。
+  final SyncEngine? syncEngine;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -24,6 +39,14 @@ class LocalDataPage extends StatelessWidget {
             ?.copyWith(fontWeight: FontWeight.w600),
       ),
       const SizedBox(height: 24),
+      if (auth != null) ...[
+        AccountCard(
+          auth: auth!,
+          syncEngine: syncEngine,
+          repository: repository,
+        ),
+        const SizedBox(height: 24),
+      ],
       const Card(
         elevation: 0,
         child: Padding(
