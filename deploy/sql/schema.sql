@@ -2,7 +2,7 @@
 -- 对齐 packages/server/lib/src/sync_store.dart 的 SyncStore 接口。
 --
 -- 表名与 docs/superpowers/specs/云同步设计-cloud-sync-design.md 第 5 节一致：
---   users   (id, email UNIQUE, password_hash, salt, created_at)
+--   users   (id, email UNIQUE, password_hash, created_at)
 --   entries (user_id, id, payload JSONB, created_at, seq)
 --   tokens  (token, user_id, created_at)      -- FakeSyncStore 有 _tokens，真实库需要
 --   sync_seq(id, value)                        -- 全局单调 seq 计数器
@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS users (
     id            TEXT PRIMARY KEY,
     email         TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    salt          TEXT NOT NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
