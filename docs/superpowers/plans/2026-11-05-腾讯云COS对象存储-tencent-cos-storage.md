@@ -1414,7 +1414,12 @@ F013 云同步的对象存储侧配置说明。ECS 服务端部署见 [阿里云
 
 ## 3. 凭证与最小权限
 
-1. 复制 `deploy/cam-policy.json`，把 `<APPID>`、`<BUCKET>`、`<PREFIX>` 替换成真实值。`<PREFIX>` 建议用 `photos`，与客户端的 key 前缀对应。
+1. 复制 `deploy/cam-policy.json`，把 `<APPID>`、`<BUCKET>`、`<PREFIX>` 替换成真实值。`<PREFIX>` 建议用 `photos`。
+   > **注意**：客户端的 photoKey 是**裸 sha256 十六进制、没有路径前缀**（见 `client/lib/src/data/sync/fake_cos.dart`）。因此对象在 COS 上的路径由**服务端代理转发时决定**——服务端把客户端的裸 sha256 key 映射到 `photos/<sha256>`。CAM 策略的前缀必须与这个服务端约定的路径一致，否则会 403。
+   > 该前缀约定在 T-24 实现服务端代理时确定；若届时改用别的路径，需同步回来改本文件与 `deploy/cam-policy.json`。
+
+> 策略必须包含 `name/cos:HeadObject`：腾讯云把 HEAD Object 与 GET Object 拆成两个独立授权项，只授 `GetObject` 时，子账号发 HEAD 请求会返回 403。服务端读对象前会先发 HEAD（秒传判存、SDK 高级下载接口都会），所以这一项是必需的。
+
 2. 访问管理 CAM → 策略 → 新建自定义策略 → **按 JSON 语法创建**，粘贴上一步准备好的策略内容（CAM 控制台的 JSON 编辑器不接受注释与尾随逗号）。
 3. 访问管理 CAM → 用户 → 新建子用户（编程访问）。
 4. 给子用户绑定上一步创建的自定义策略。
