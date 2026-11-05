@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-05（Part 5「ECS 部署链路」完成后）
+- 最后更新：2026-11-05（对象存储供应商由阿里云 OSS 改为腾讯云 COS，数据路径定为 ECS 代理收发字节后）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -12,8 +12,9 @@
 | T-01 | **DP-05 真机可连**：release APK 装到小米 2211133C 后能连 `https://8.148.158.13` 完成登录（内置 CA 生效，不报证书错误） | 未执行 | 真机 USB 未连接（用户 2026-11-05 暂时拔除），本轮改用请求做等价验证 | 连上手机 → 装 APK → 启动查 SSL/证书日志 → App 内登录 | 部署计划 Task 8 Step 2–3 |
 | T-02 | **DP-06 真机推送**：真机写一篇日记并触发推送，服务端能查到该条目 | 未执行 | 同 T-01 | App 内新建并保存日记 → 服务端用 curl 查该条目 | 部署计划 Task 8 Step 4 |
 | T-03 | **DP-09 落库验证**：bcrypt 哈希以 `$2b$` 形式落进 `users.password_hash`，DB 级邮箱唯一性约束生效 | 未执行 | 服务端仍是 FakeSyncStore（内存），无真实 DB | 接入 PostgresSyncStore 后查 `select email, password_hash from users` | 部署计划 DP-09 |
-| T-04 | 真机端到端跨设备同步（含照片） | 未执行 | 无真机 + 无真实 OSS | T-01 / T-02 完成后补做 | 设计 AC-03 / AC-06 |
-| T-05 | 真机阿里云 OSS 直传（预签名、私有 bucket、境内 region） | 未执行 | 环境无 OSS bucket | bucket 就绪后替换 OSSGateway 实现 | 设计 §11 |
+| T-04 | 真机端到端跨设备同步（含照片） | 未执行 | 无真机 + 无真实 COS | T-01 / T-02 完成后补做 | 设计 AC-03 / AC-06 |
+| T-05 | **建桶 + CAM 凭证**：腾讯云 COS ap-guangzhou 私有桶、CAM 子用户 + bucket 级最小权限策略（只授 PutObject/GetObject，不授 DeleteObject）、密钥只存 ECS 服务端环境变量 | 未执行 | 桶尚未创建 | 控制台建桶 → 写 `deploy/cam-policy.json` → 建子用户绑定策略 → 密钥写入 ECS 环境变量 | [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) §3.4 |
+| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 未执行 | 依赖 T-05 + 无真机 | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 8 MB 请求体上限** | COS 设计 §3.2 / §3.3 |
 
 ## B. 功能延后（未实现）
 
@@ -47,6 +48,7 @@
 | T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 服务异常返回非 401 时脚本仍继续 |
 | T-22 | `deploy-app.sh` 无执行位（用法为 `bash deploy-app.sh`，功能无碍） | `deploy/deploy-app.sh` | 报告措辞与实际不一致 |
 | T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:41` | 来自 F005（非 F013 引入），合并前应清理 |
+| T-25 | **ECS 公网带宽不足**：实测出向 ~428 KB/s（3.4 Mbps）、入向 ~10 Mbps。ECS 代理方案下下载一张 4 MB 照片约 10 秒，100 张批量同步约 16 分钟 | 已实测记录 | 已知限制，用户已知悉并选择维持 ECS 代理 | 缓解方向见 COS 设计 §9（客户端上传前压缩最有效）；或在 T-24 一并评估升配/加带宽 | COS 设计 §3.3 |
 
 ## 合并门槛
 
