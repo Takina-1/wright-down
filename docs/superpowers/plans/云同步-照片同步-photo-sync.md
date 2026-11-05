@@ -4,7 +4,7 @@
 
 **Goal:** 让随手拍的照片跨设备同步：Entry 加 photoKey（COS key，同步字段），BLOB photo 留本地；FakeCos 实现 CosGateway；映射 'photo' 字段=photoKey；SyncEngine push 上传设 key、pull 下载 BLOB。
 
-**Architecture:** 照片是 BLOB，不直接走字段级 LWW——走 COS 直传：本地 photo BLOB → 上传 COS 得 key → sync 字段 'photo' 存 key → 其他设备拉到 key → 下载 BLOB 显示。FakeCos（本地文件系统）开发期用；真机腾讯云 COS 延后。
+**Architecture:** 照片是 BLOB，不直接走字段级 LWW——经服务端代理 COS：本地 photo BLOB → 上传 COS 得 key → sync 字段 'photo' 存 key → 其他设备拉到 key → 下载 BLOB 显示。FakeCos（本地文件系统）开发期用；真机腾讯云 COS 延后。
 
 **Tech Stack:** Dart/Flutter 3.13.7，`dart:crypto`（sha256 key），sync_core `CosGateway`，sqflite_common_ffi（宿主测试）。
 
@@ -393,7 +393,7 @@ git commit -m "feat(F013):照片缩略图同步,add photo thumbnail from photoKe
 
 ## 自检
 
-- **Spec 覆盖**：spec 第 6 节（照片走 COS 直传、sha256 key、服务端代理）、第 4 节（同步字段）由 Task 1-4 覆盖。
+- **Spec 覆盖**：spec 第 6 节（照片经服务端代理 COS、sha256 key）、第 4 节（同步字段）由 Task 1-4 覆盖。
 - **占位符**：Task 3 测试里 `remote.nextPull` 先设 null photo 再改有 key 的——这是测试构造，非占位。
 - **类型一致**：photoKey/photo/CosGateway/FakeCos 签名在实现与测试一致。
 

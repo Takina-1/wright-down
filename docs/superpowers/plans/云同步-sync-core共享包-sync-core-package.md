@@ -544,7 +544,7 @@ void main() {
 
   group('CosGateway 契约', () {
     test('测试替身可实现 CosGateway', () async {
-      final g = _FakeOss();
+      final g = _FakeCos();
       final key = await g.upload(Uint8List.fromList([1, 2, 3]));
       expect(key, 'key-1');
       expect((await g.download('key-1')), Uint8List.fromList([1, 2, 3]));
@@ -610,7 +610,7 @@ abstract interface class AuthProvider {
 ```dart
 import 'dart:typed_data';
 
-/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理读写。
+/// COS 访问抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理读写。
 /// 本接口不依赖任何 SDK。
 abstract interface class CosGateway {
   /// 上传字节，返回可持久化的 key（sha256）。
