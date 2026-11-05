@@ -189,3 +189,24 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 - 是否满足全部必需验收项：**否**。真机相关的 DP-05 / DP-06 未执行，不计入通过；其余部署链路验收项全部通过。
 - 下一步：连接真机补做 DP-05 / DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证与真机 COS；实现 token 刷新（AC-08）。
 - 未完成项的逐条登记见 [F013 待办登记表](../features/F013-待办-todos.md)。
+
+## 第三轮：对象存储供应商迁移与命名对齐（2026-11-05）
+
+- 关联设计：[腾讯云 COS 对象存储](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md)
+- 被测 commit：`9400896`（分支 `feat/F013-cloud-sync`；本节记录于其后的报告提交）
+- 改动性质：纯机械重命名 + 文档替换，**运行行为不变**
+
+| 检查 | 结果 |
+|---|---|
+| sync_core 静态分析 | No issues found |
+| server 静态分析 | No issues found |
+| client 静态分析 | 无新增 warning |
+| sync_core 测试 | 13 项全过 |
+| server 测试 | 31 项全过 |
+| client 测试 | 442 项全过 |
+| client 调试 APK 构建 | 成功 |
+
+- 命名：`OSSGateway`→`CosGateway`、`FakeOSS`→`FakeCos`、`oss_gateway.dart`→`cos_gateway.dart`、`fake_oss.dart`→`fake_cos.dart`、`SyncEngine.oss`→`SyncEngine.cos`。
+- 文档：产品设计、F012、F013 待办与台账、云同步设计、三份实现计划、测试报告、OPPO 上架清单、开源仓库资料中的对象存储表述统一为腾讯云 COS；ECS 侧事实表述保持不动。
+- 新增：`deploy/腾讯云COS配置-tencent-cos-setup.md`、`deploy/cam-policy.json`。
+- **未执行**：真机腾讯云 COS 读写（T-05 / T-24）。桶尚未创建，本次不含任何真实 COS 链路的验证证据。
