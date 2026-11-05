@@ -1505,7 +1505,25 @@ ECS 代理方案下，服务端还要代理照片字节收发，不再只是「�
 
 > 不要动同段落的另外两条铁律（UI 层不直接碰 RemoteRepo、写入只走 LocalRepo、Domain 层不 import 任何框架/SDK）——它们仍然成立。
 
-- [ ] **Step 4: 更新文档总索引**
+- [ ] **Step 4: 修正代码里最后一处「直传」表述**
+
+`packages/sync_core/lib/src/cos_gateway.dart` 第 3–4 行现在是：
+
+```dart
+/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
+/// 读写（本接口不依赖任何 SDK）。
+```
+
+「直传」是旧架构（客户端直连对象存储）的说法，与已确定的 ECS 代理架构矛盾——Task 6 已把全部文档里的「直传」改为「经服务端代理」，这里要保持一致。改为：
+
+```dart
+/// COS 访问抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
+/// 读写（本接口不依赖任何 SDK）。
+```
+
+> 只改这一处注释文字，**不动接口声明、方法签名、方法体**——那些是 Task 1 已评审通过的内容。
+
+- [ ] **Step 5: 更新文档总索引**
 
 `docs/README.md` 的「按问题找文档」表格，在「如何准备 OPPO 上架」那一行之后新增一行：
 
@@ -1526,7 +1544,7 @@ ECS 代理方案下，服务端还要代理照片字节收发，不再只是「�
 
 > 注：`docs/README.md` 里的链接指向 `../deploy/`（仓库根下的 deploy 目录），不是 `docs/deploy/`。
 
-- [ ] **Step 5: 校验 JSON 与链接**
+- [ ] **Step 6: 校验 JSON 与链接**
 
 Run:
 ```bash
@@ -1546,10 +1564,10 @@ ls deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json
 ```
 Expected: 两个文件都存在。
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 7: 提交**
 
 ```bash
-git add deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json docs/README.md docs/产品设计-product-design.md
+git add deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json docs/README.md docs/产品设计-product-design.md packages/sync_core/lib/src/cos_gateway.dart
 git commit -m "docs(F013):新增腾讯云COS配置文档与CAM策略,add tencent cos setup doc and cam policy"
 ```
 
