@@ -51,7 +51,7 @@ void main() {
       repository: repo,
       remote: remote,
       auth: _FakeAuth(),
-      oss: FakeCos(),
+      cos: FakeCos(),
       now: () => DateTime.now(),
     );
     await engine.pullOnce();

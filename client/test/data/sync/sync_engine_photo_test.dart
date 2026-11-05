@@ -43,7 +43,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: oss,
+        cos: oss,
         now: () => DateTime.now(),
       );
       await repo.save(Entry(
@@ -83,7 +83,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: oss,
+        cos: oss,
         now: () => DateTime.now(),
       );
       await engine.pullOnce();

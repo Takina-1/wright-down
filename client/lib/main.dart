@@ -43,7 +43,7 @@ class _StartupState extends State<_Startup> {
       auth: auth,
       // FakeCos 是开发期占位实现（本地临时目录）；真机 COS 网关待后续
       // Part 接入后替换。
-      oss: FakeCos(),
+      cos: FakeCos(),
       now: DateTime.now,
     );
     // 启动即拉一次 + 开启 5 分钟周期拉取。未登录时 triggerPull 内部

@@ -45,7 +45,7 @@ class _FakeSyncEngine extends SyncEngine {
         repository: MemoryRepository(),
         remote: _NoopRemote(),
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
 

@@ -82,7 +82,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
       expect(engine.state, SyncState.idle);
@@ -117,7 +117,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
       final sub = engine.stateChanged.listen((_) {});
@@ -138,7 +138,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
       engine.start();
@@ -158,7 +158,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
       engine.start();
@@ -183,7 +183,7 @@ void main() {
         repository: repo,
         remote: remote,
         auth: _FakeAuth(),
-        oss: FakeCos(),
+        cos: FakeCos(),
         now: () => DateTime.now(),
       );
       await repo.save(Entry(

@@ -50,10 +50,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 或者误触「撤销」把刚删掉的记录又恢复回来）。
   String? _undoableEntryId;
 
-  /// 从 OSS 下载回来的照片字节（photo=null 但 photoKey 存在时用）。
+  /// 从 COS 下载回来的照片字节（photo=null 但 photoKey 存在时用）。
   ///
   /// 编辑一条远端拉下来的条目时，本地 photo BLOB 可能还没缓存（只有
-  /// photoKey）。composer 凭 photoKey 向 OSS 下载一份临时字节显示缩略图；
+  /// photoKey）。composer 凭 photoKey 向 COS 下载一份临时字节显示缩略图；
   /// 不写回仓储（写回由 SyncEngine.pullOnce 负责），仅作显示用。
   Uint8List? _remotePhoto;
 
@@ -90,7 +90,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// 同步「远端照片」下载状态：本地有 BLOB 就用本地；本地没有但 photoKey
-  /// 存在就向 OSS 下载一份临时字节显示；都没有就清空。
+  /// 存在就向 COS 下载一份临时字节显示；都没有就清空。
   ///
   /// 编辑器每次变更都会通知（_changed），这里用 [_downloadedKey] 记住
   /// 已发起下载的 key，避免每个按键都重新下载。
@@ -118,13 +118,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     unawaited(_fetchRemotePhoto(key));
   }
 
-  /// 按 photoKey 从 OSS 下载照片字节，下载成功后 setState 显示。
+  /// 按 photoKey 从 COS 下载照片字节，下载成功后 setState 显示。
   ///
   /// 下载期间用户可能换了照片或 photoKey：只在本地仍无 BLOB 且 key 未变
   /// 时才显示，避免迟到的下载盖掉用户刚选的新照片。
   Future<void> _fetchRemotePhoto(String key) async {
     try {
-      final bytes = await widget.syncEngine!.oss.download(key);
+      final bytes = await widget.syncEngine!.cos.download(key);
       if (!mounted) return;
       if (_editor.photo != null || _editor.photoKey != key) return;
       setState(() => _remotePhoto = bytes);

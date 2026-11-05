@@ -33,14 +33,14 @@ class SyncEngine {
     required this.repository,
     required this.remote,
     required this.auth,
-    required this.oss,
+    required this.cos,
     required this.now,
   });
 
   final LocalEntryRepository repository;
   final SyncRemote remote;
   final AuthProvider auth;
-  final CosGateway oss;
+  final CosGateway cos;
 
   // 预留给未来时间戳需求（如记录 lastSyncedAt）；当前触发循环与退避
   // 不读当前时间，故字段仍未被读取。
@@ -77,12 +77,12 @@ class SyncEngine {
     final me = await _me();
     if (me == null) return;
     var entries = await repository.exportAll();
-    // 照片上传：photo 有 BLOB 但无 photoKey 的条目，上传 OSS 并设 key。
+    // 照片上传：photo 有 BLOB 但无 photoKey 的条目，上传 COS 并设 key。
     // 用 saveMerged 保留既有 sync_stamps（含 photo 戳），避免 save 重算时间戳。
     for (var i = 0; i < entries.length; i++) {
       final e = entries[i];
       if (e.photo != null && e.photoKey == null) {
-        final key = await oss.upload(e.photo!);
+        final key = await cos.upload(e.photo!);
         final stamps = {...e.syncStamps, 'photo': now().millisecondsSinceEpoch};
         final updated = Entry(
           id: e.id,
@@ -130,10 +130,10 @@ class SyncEngine {
           ? _fromSyncEntry(remoteEntry)
           : applyRemote(existing, remoteEntry);
       await repository.saveMerged(merged);
-      // 照片下载：photoKey 有但本地 photo BLOB 缺失，从 OSS 下载缓存。
+      // 照片下载：photoKey 有但本地 photo BLOB 缺失，从 COS 下载缓存。
       // 用 saveMerged 保留 photoKey 与 photo 戳（photo 是本地缓存不进 sync 字段）。
       if (merged.photoKey != null && merged.photo == null) {
-        final bytes = await oss.download(merged.photoKey!);
+        final bytes = await cos.download(merged.photoKey!);
         final withPhoto = Entry(
           id: merged.id,
           content: merged.content,
