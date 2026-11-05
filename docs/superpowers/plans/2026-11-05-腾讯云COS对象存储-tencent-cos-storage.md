@@ -21,6 +21,8 @@
 - **提交信息格式**：`<type>:<中文说明>,<english summary>`，需要标注功能编号时写成 `docs(F013):<中文说明>,<english summary>`。中文说明写清本次改动，英文摘要用祈使句并与中文对应。
 - **文档命名**：除 `README.md` / `AGENTS.md` / `CLAUDE.md` 外，Markdown 文件名必须为 `<中文主题>-<english-topic>.md`，英文主题小写连字符。新增文件为 `deploy/腾讯云COS配置-tencent-cos-setup.md`。
 - **本计划不实现真机 COS**。建桶、CAM 凭证、服务端代理端点、客户端真机版全部延后，作为 F013 待办 T-05 / T-24。
+- **Task 1 与 Task 2 之间，`client/` 处于不可编译状态**：Task 1 把 `OSSGateway` 改成 `CosGateway` 后，`client/lib/src/data/sync/sync_engine.dart`、`client/lib/src/data/sync/fake_oss.dart`、`client/test/ui/home_page_photo_sync_test.dart` 仍引用旧名。这三处由 Task 2 修复，**Task 2 完成后 `client/` 恢复可编译**。因此 Task 1 与 Task 2 之间不要跑 client 的 analyze/test，也不要在这个中间态上做整分支验证。
+- **`git add` 旧路径会中止整条命令**：凡是用 `git mv` 重命名的文件，旧路径已被删除记入索引，`git add <旧路径>` 报 `fatal: pathspec ... did not match any files`，且 git 遇到无效 pathspec 时**中止整条命令**——后面的路径一个都不会被暂存。只 add 仍存在的路径。
 
 ---
 
@@ -127,10 +129,12 @@ Expected: analyze 输出 `No issues found`；test 输出 `All tests passed!`，�
 - [ ] **Step 8: 提交**
 
 ```bash
-git add packages/sync_core/lib/src/cos_gateway.dart packages/sync_core/lib/src/oss_gateway.dart packages/sync_core/lib/sync_core.dart packages/sync_core/test/interfaces_test.dart packages/sync_core/pubspec.yaml
+git add packages/sync_core/lib/src/cos_gateway.dart packages/sync_core/lib/sync_core.dart packages/sync_core/test/interfaces_test.dart packages/sync_core/pubspec.yaml
 git commit -m "refactor(F013):重命名同步抽象为CosGateway,rename sync abstraction to CosGateway"
 ```
 Expected: 提交成功。`git status --short` 中不应再出现 `packages/sync_core/lib/src/oss_gateway.dart`。
+
+> ⚠️ **不要 add 旧路径**（`oss_gateway.dart`）。`git mv` 已把删除记入索引，add 旧路径会报 `fatal: pathspec ... did not match any files`，且遇到无效 pathspec 时整条 `git add` 命令中止——后面的路径一个都不会被暂存。只 add 仍存在的路径即可；`git mv` 的重命名记录由索引自动携带。
 
 ---
 
@@ -361,9 +365,11 @@ Expected: analyze 无新增 warning；fake_cos_test 输出 `All tests passed!`�
 - [ ] **Step 9: 提交**
 
 ```bash
-git add client/lib/src/data/sync/fake_cos.dart client/lib/src/data/sync/fake_oss.dart client/lib/main.dart client/lib/src/data/sync/sync_engine.dart client/test/data/sync/fake_cos_test.dart client/test/data/sync/fake_oss_test.dart client/test/data/sync/sync_engine_photo_test.dart client/test/data/sync/sync_engine_runtime_test.dart client/test/data/sync/sync_engine_stamps_test.dart client/test/data/sync/sync_engine_test.dart client/test/ui/home_page_photo_sync_test.dart client/test/ui/sync/login_page_test.dart
+git add client/lib/src/data/sync/fake_cos.dart client/lib/main.dart client/lib/src/data/sync/sync_engine.dart client/test/data/sync/fake_cos_test.dart client/test/data/sync/sync_engine_photo_test.dart client/test/data/sync/sync_engine_runtime_test.dart client/test/data/sync/sync_engine_stamps_test.dart client/test/data/sync/sync_engine_test.dart client/test/ui/home_page_photo_sync_test.dart client/test/ui/sync/login_page_test.dart
 git commit -m "refactor(F013):重命名本地存储替身为FakeCos,rename fake storage to FakeCos"
 ```
+
+> ⚠️ **不要 add 旧路径**（`fake_oss.dart`、`fake_oss_test.dart`）。`git mv` 已把删除记入索引，add 旧路径会报 `fatal: pathspec ... did not match any files`，且遇到无效 pathspec 时整条 `git add` 命令中止——后面的路径一个都不会被暂存。只 add 仍存在的路径即可；`git mv` 的重命名记录由索引自动携带。
 
 ---
 
@@ -551,6 +557,7 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
 ### Task 4: 领域注释与存储键表述统一
 
 **Files:**
+- Modify: `packages/sync_core/lib/src/entry_sync.dart`
 - Modify: `client/lib/src/domain/entry.dart`
 - Modify: `client/lib/src/data/local/sqlite_entry_repository.dart`
 - Modify: `client/lib/src/ui/entry_editor_controller.dart`
@@ -561,7 +568,18 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
 - Consumes: 无（纯注释改动）
 - Produces: 无接口变化。`photoKey` 字段名与 `photo_key` 列名**不变**，只改注释文字。
 
-- [ ] **Step 1: 改写 `entry.dart` 的注释**
+- [ ] **Step 1: 改写 `entry_sync.dart` 的注释**
+
+`packages/sync_core/lib/src/entry_sync.dart` 第 9 行：
+```dart
+/// - photo: String?（OSS key；null 表示无照片）
+```
+改为：
+```dart
+/// - photo: String?（COS key；null 表示无照片）
+```
+
+- [ ] **Step 2: 改写 `entry.dart` 的注释**
 
 第 22 行：
 ```dart
@@ -581,7 +599,7 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
   /// 照片 COS key（同步字段）。非空表示照片已上传 COS，其他设备凭此 key
 ```
 
-- [ ] **Step 2: 改写 `sqlite_entry_repository.dart` 的 3 处注释**
+- [ ] **Step 3: 改写 `sqlite_entry_repository.dart` 的 3 处注释**
 
 第 105 行：
 ```dart
@@ -610,7 +628,7 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
               // 插入时带上照片 COS key：存 TEXT，null 即不带 key。
 ```
 
-- [ ] **Step 3: 改写 `memory_repository.dart` 的 2 处注释**
+- [ ] **Step 4: 改写 `memory_repository.dart` 的 2 处注释**
 
 第 191 行：
 ```dart
@@ -630,7 +648,7 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
       // 恢复不碰照片 COS key：删除标记清了，key 仍保留供跨设备下载。
 ```
 
-- [ ] **Step 4: 改写 `entry_editor_controller.dart` 的注释**
+- [ ] **Step 5: 改写 `entry_editor_controller.dart` 的注释**
 
 第 46 行：
 ```dart
@@ -641,7 +659,7 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
   /// 照片 COS key（同步字段）。编辑一条已同步照片的条目时，这个 key 必须
 ```
 
-- [ ] **Step 5: 改写 `sync_engine_photo_test.dart` 的 3 处文案**
+- [ ] **Step 6: 改写 `sync_engine_photo_test.dart` 的 3 处文案**
 
 第 69 行：
 ```dart
@@ -670,22 +688,22 @@ git commit -m "refactor(F013):同步引擎改用cos字段,rename sync engine sto
           reason: 'pull 后必须从 COS 下载 BLOB 落本地 photo');
 ```
 
-- [ ] **Step 6: 验证**
+- [ ] **Step 7: 验证**
 
 Run:
 ```bash
-cd client && grep -rn "OSS" lib/ test/
+cd client && grep -rn "OSS" lib/ test/ --include="*.dart"
 ```
-Expected: 仅剩 `'some-oss-key'` 字面量（小写 oss，非大写 OSS）应被此 grep 命中——若命中，属测试夹具数据，**保留**。不应有任何大写 `OSS` 出现在 `lib/` 与 `test/`。
+Expected: **无输出**。`grep` 大小写敏感，`'some-oss-key'` 是小写，不匹配本模式——那 6 处测试夹具字面量保留不动是正确的。
 
 Run:
 ```bash
 cd client && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\dev\myapp\scripts\flutter.ps1" analyze
 cd client && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\dev\myapp\scripts\flutter.ps1" test
 ```
-Expected: analyze 无新增 warning；test 计数 **442**。
+Expected: analyze 报 3 个 pre-existing issue（`home_page.dart:51` unused_field、`sync_engine_stamps_test.dart:5` 与 `:6` unused import）——**与基线一致，无新增**；test 计数 **442**。
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 8: 提交**
 
 ```bash
 git add client/lib/src/domain/entry.dart client/lib/src/data/local/sqlite_entry_repository.dart client/lib/src/ui/entry_editor_controller.dart client/test/support/memory_repository.dart client/test/data/sync/sync_engine_photo_test.dart
@@ -1541,7 +1559,7 @@ Run:
 ```bash
 grep -rn "OSS" docs/ deploy/ --include="*.md" --include="*.json" --include="*.sh"
 ```
-Expected: 仅命中本计划文档与 COS 设计文档自身。`deploy/阿里云部署-aliyun-deploy.md` 与 `deploy/ram-policy.json` 中的阿里云 ECS 表述**不含 OSS 字样**，应零命中。
+Expected: 仅命中**本计划文档**与 **COS 设计文档**（两者都记录了「从阿里云 OSS 改为腾讯云 COS」的来龙去脉，属有意保留）。其余文件零命中——包括 `deploy/阿里云部署-aliyun-deploy.md`、`deploy/ram-policy.json`、`deploy/deploy-app.sh`、`deploy/nginx/diary-sync.conf`（实测这 4 个文件本来就不含 OSS 字样）。
 
 - [ ] **Step 3: 三包静态分析**
 
@@ -1551,7 +1569,7 @@ cd packages/sync_core && powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 cd packages/server && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\dev\myapp\scripts\dart.ps1" analyze
 cd client && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "D:\dev\myapp\scripts\flutter.ps1" analyze
 ```
-Expected: sync_core 与 server 输出 `No issues found`；client 无新增 warning（现有 3 个 pre-existing warning：`home_page.dart:41` 的 `unused_field _undoableEntryId`、`sync_engine_stamps_test.dart` 的 2 个 unused import——注意后者在本计划中可能因 import 调整而消失，若消失属改善，不算失败）。
+Expected: sync_core 与 server 输出 `No issues found`；client 报 **3 个 issue**，与基线完全一致（`home_page.dart:51` 的 `unused_field _undoableEntryId`、`sync_engine_stamps_test.dart:5` 与 `:6` 的 2 个 unused import）。出现任何**新增** issue 即为失败。
 
 - [ ] **Step 4: 三包测试**
 
