@@ -15,9 +15,9 @@ void main() {
     });
   });
 
-  group('OSSGateway 契约', () {
-    test('测试替身可实现 OSSGateway', () async {
-      final g = _FakeOss();
+  group('CosGateway 契约', () {
+    test('测试替身可实现 CosGateway', () async {
+      final g = _FakeCos();
       final key = await g.upload(Uint8List.fromList([1, 2, 3]));
       expect(key, 'key-1');
       expect((await g.download('key-1')), Uint8List.fromList([1, 2, 3]));
@@ -39,7 +39,7 @@ class _FakeAuth implements AuthProvider {
   Future<void> signOut() async {}
 }
 
-class _FakeOss implements OSSGateway {
+class _FakeCos implements CosGateway {
   @override
   Future<String> upload(Uint8List bytes) async => 'key-1';
   @override

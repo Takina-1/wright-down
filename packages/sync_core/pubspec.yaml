@@ -1,5 +1,5 @@
 name: sync_core
-description: "云同步共享纯逻辑包：字段级 LWW 合并、同步协议、鉴权/OSS 抽象。"
+description: "云同步共享纯逻辑包：字段级 LWW 合并、同步协议、鉴权/COS 抽象。"
 publish_to: 'none'
 version: 0.0.1
 
