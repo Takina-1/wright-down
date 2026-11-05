@@ -206,11 +206,13 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 | server 静态分析 | `dart analyze`（packages/server） | No issues found |
 | client 静态分析 | `flutter analyze` | 无新增 warning（现有 3 个 pre-existing warning 不计） |
 | sync_core 测试 | `dart test` | 13 项全过 |
-| server 测试 | `dart test` | 13 项全过 |
-| client 测试 | `flutter test` | 415 项全过（合计仍为 441） |
+| server 测试 | `dart test` | 31 项全过 |
+| client 测试 | `flutter test` | 442 项全过 |
 | client 构建 | `flutter build apk --debug` | 成功 |
 
-重命名是纯机械改动，**行为不变**，因此期望所有测试数量与结果与重命名前一致。任何一项失败或数量变化都视为重命名引入的问题，必须修复。
+重命名是纯机械改动，**行为不变**，因此期望所有测试数量与结果与重命名前一致（基线：sync_core 13、server 31、client 442，2026-11-05 实测）。任何一项失败或数量变化都视为重命名引入的问题，必须修复。
+
+> 注：server 的 31 项含工作区未提交的 `fake_sync_store_sync_test.dart` 改动；重命名不涉及 server 业务逻辑，该计数仅作基线参考。
 
 文档改动为纯文本替换，核对方式是：改完后全仓库搜索 `OSS`、`oss`、`FakeOSS`、`OSSGateway` 应只剩下「对象存储」的通用语义用法与本文档 §5 的限制描述。
 
