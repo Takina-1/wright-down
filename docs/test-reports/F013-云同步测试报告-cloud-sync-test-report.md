@@ -7,9 +7,9 @@
 
 ## 范围
 
-Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 LWW）、照片同步（FakeOSS）。
-- 包含：sync_core 共享包、服务端（Dart shelf + FakeSyncStore）、客户端同步引擎（RemoteRepo + SyncEngine + 触发/退避/状态）、鉴权 UI + 认领、照片同步（schema v7 photo_key + FakeOSS + 上传/下载）。
-- 不包含（延后）：PostgresSyncStore（环境无 postgres）、真机阿里云 OSS（环境无 bucket）、SMS/找回、真机端到端验收。
+Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 LWW）、照片同步（FakeCos）。
+- 包含：sync_core 共享包、服务端（Dart shelf + FakeSyncStore）、客户端同步引擎（RemoteRepo + SyncEngine + 触发/退避/状态）、鉴权 UI + 认领、照片同步（schema v7 photo_key + FakeCos + 上传/下载）。
+- 不包含（延后）：PostgresSyncStore（环境无 postgres）、真机腾讯云 COS（环境无 bucket）、SMS/找回、真机端到端验收。
 
 ## 宿主验证
 
@@ -19,7 +19,7 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 
 | 包/模块 | 测试数 | 覆盖 |
 |---|---|---|
-| sync_core | 13 | 字段级 LWW、协议编解码、鉴权/OSS 抽象契约 |
+| sync_core | 13 | 字段级 LWW、协议编解码、鉴权/COS 抽象契约 |
 | server（FakeSyncStore + shelf handler） | 13 | 鉴权、同步合并、seq 游标、handler |
 | client（同步引擎核心 + UI + 触发 + 照片） | 415 | schema v6/v7 迁移、时间戳维护、Entry↔SyncEntry 映射、RemoteRepo、SyncEngine 推拉/触发/退避、鉴权 UI、认领、同步状态、照片上传/下载、缩略图 |
 | **合计** | **441** | 0 失败 |
@@ -44,7 +44,7 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 
 - **M-16（save 覆盖远端时间戳）**：终审发现 pull 调 save 会用 updatedAt 重算 sync_stamps，丢弃远端字段 t。修：新增 `saveMerged` 保留调用方 syncStamps，SyncEngine.pullOnce 用 saveMerged。TDD RED(5000/1000)→GREEN。
 - **Critical（pushOnce 跳过软删除条目）**：终审发现 pushOnce 过滤 `!isDeleted`，导致删除标记不同步。修：移除过滤 + 回归测试。
-- **photoKey 持久化**：编辑器 _saveLoop 必须携带 photoKey，否则编辑同步的照片条目会清空 OSS key。修：EntryEditorController 携带 photoKey。
+- **photoKey 持久化**：编辑器 _saveLoop 必须携带 photoKey，否则编辑同步的照片条目会清空 COS key。修：EntryEditorController 携带 photoKey。
 
 ## 验收标准对照（AC-01~AC-08，宿主部分）
 
@@ -55,7 +55,7 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 | AC-03 | 两设备文本同步 | SyncEngine 推拉测试通过 | 未执行 |
 | AC-04 | 离线写入→联网推送 | triggerPush 测试通过 | 未执行 |
 | AC-05 | 字段级冲突 | mergeFieldLww/applyRemote 测试通过 | 未执行 |
-| AC-06 | 照片同步 | FakeOSS 上传/下载 + SyncEngine 照片测试通过 | 未执行 |
+| AC-06 | 照片同步 | FakeCos 上传/下载 + SyncEngine 照片测试通过 | 未执行 |
 | AC-07 | 游标原子性 | FakeSyncStore 内存单线程（非真事务） | 未执行（PostgresSyncStore 延后） |
 | AC-08 | 401 处理 | 未完整实现（延后） | 未执行 |
 
@@ -63,16 +63,16 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 
 本轮**未连接 Android 设备**做端到端真机验收。以下项一律记「未执行」，不计入通过：
 - 真机注册/登录（FakeSyncStore 无真实服务端）。
-- 真机两设备文本/照片同步（无真实服务端 + 无真实 OSS）。
+- 真机两设备文本/照片同步（无真实服务端 + 无真实 COS）。
 - 真机同步状态 UI、认领弹窗实际交互。
 - schema v7 迁移在真机库上的表现。
 
-宿主测试用 FakeSyncStore / FakeOSS / 替身覆盖逻辑契约，**不能**替代真机结论。
+宿主测试用 FakeSyncStore / FakeCos / 替身覆盖逻辑契约，**不能**替代真机结论。
 
 ## 已知限制
 
 1. **服务端用 FakeSyncStore（内存）**：环境无 postgres/Docker。PostgresSyncStore（真实 SQL + 事务游标，满足 AC-07）延后。服务端逻辑已宿主测试，真实持久化未验证。
-2. **照片用 FakeOSS（本地文件系统）**：环境无阿里云 OSS bucket。真机 OSS 直传（预签名、私有 bucket、境内 region）延后。OSSGateway 抽象已就位，届时替换实现。
+2. **照片用 FakeCos（本地文件系统）**：环境无腾讯云 COS bucket。真机 COS（服务端代理读写、私有 bucket、境内 region）延后。CosGateway 抽象已就位，届时替换实现。
 3. **密码哈希是 sha256+salt**：非 bcrypt/argon2。生产部署前必须换。
    → **第二轮已解决**：服务端改用 bcrypt（cost 10，`$2b` 前缀），见「第二轮」章节。
 4. **Token 无过期/刷新**：InMemoryTokenStore 重启失 token。AC-08 的 refresh 流程未实现。
@@ -84,14 +84,14 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 ## 本轮结论
 
 - 通过：441 项宿主自动化测试 + 三包静态分析 + 调试 APK 构建。
-- 未执行：真机端到端验收（无连接设备 + 无真实服务端/OSS）。
+- 未执行：真机端到端验收（无连接设备 + 无真实服务端/COS）。
 - 是否满足全部必需验收项：宿主可验证部分全部通过；AC-07/AC-08 及真机项未执行，不计入通过。
-- 下一步：连接 Android 设备 + 部署真实服务端/OSS 后补做真机端到端验收；实现 PostgresSyncStore、真机 OSS、bcrypt、token 刷新。
+- 下一步：连接 Android 设备 + 部署真实服务端/COS 后补做真机端到端验收；实现 PostgresSyncStore、真机 COS、bcrypt、token 刷新。
 
 ## 环境发现（终审记录）
 
 - 本机 Dart 3.13.7 SDK 的集合 `==` 是身份比较（非 const 的 `['a'] == ['a']` 为 false）。sync_core FieldValue.== 已加深度比较修复。
-- `dart:crypto` 在本 SDK 缺失，服务端与 FakeOSS 用 `package:crypto`。
+- `dart:crypto` 在本 SDK 缺失，服务端与 FakeCos 用 `package:crypto`。
 
 ---
 
@@ -180,12 +180,12 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 4. **release APK 仍用 debug keys 签名**，正式发布前需配置真实签名。
 5. **服务端 nginx 已被公网扫描器探测到**（日志见 `195.96.139.110` 扫 `/` → 404）；当前未做额外加固，仅 443 对外且需证书。
 6. **实例规格**：`ecs.e-c1m1.large`（1.6 GiB 突发型），正式承载数据库前建议变配到 `ecs.g7.large`（跨规格族不可直接变配）。
-7. **真机 OSS**、**token 刷新（AC-08）**、**真机端到端验收**均未执行/未实现。
+7. **真机 COS**、**token 刷新（AC-08）**、**真机端到端验收**均未执行/未实现。
 
 ## 本轮结论
 
 - 通过：DP-01、DP-02、DP-03、DP-04、DP-07、DP-08、DP-09、DP-10、DP-11（9 项）。
-- 未执行：DP-05、DP-06（真机未连接）；DP-09 的 DB 落库部分；真机 OSS；跨设备真机同步。
+- 未执行：DP-05、DP-06（真机未连接）；DP-09 的 DB 落库部分；真机 COS；跨设备真机同步。
 - 是否满足全部必需验收项：**否**。真机相关的 DP-05 / DP-06 未执行，不计入通过；其余部署链路验收项全部通过。
-- 下一步：连接真机补做 DP-05 / DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证与真机 OSS；实现 token 刷新（AC-08）。
+- 下一步：连接真机补做 DP-05 / DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证与真机 COS；实现 token 刷新（AC-08）。
 - 未完成项的逐条登记见 [F013 待办登记表](../features/F013-待办-todos.md)。

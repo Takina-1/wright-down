@@ -20,10 +20,10 @@
 
 | Part | 内容 | 依赖 |
 |---|---|---|
-| **Part 1（本计划）** | sync_core 共享包：字段级 LWW、同步协议、鉴权/OSS 抽象 | 无 |
+| **Part 1（本计划）** | sync_core 共享包：字段级 LWW、同步协议、鉴权/COS 抽象 | 无 |
 | Part 2 | 服务端：Dart shelf + postgres，auth + sync API | sync_core |
 | Part 3 | 客户端同步引擎：RemoteRepo + SyncEngine + 认领 + 同步状态 UI | sync_core + Part 2 |
-| Part 4 | 照片同步：fake OSS + 照片上传/传播 | Part 3 |
+| Part 4 | 照片同步：fake COS + 照片上传/传播 | Part 3 |
 
 ## 文件结构
 
@@ -35,14 +35,14 @@ packages/sync_core/
   lib/src/merge_decision.dart           # 字段级 LWW 纯函数
   lib/src/sync_protocol.dart            # 拉取/推送类型 + SyncCodec
   lib/src/auth_provider.dart            # AuthProvider 抽象 + AuthResult
-  lib/src/oss_gateway.dart              # OSSGateway 抽象
+  lib/src/cos_gateway.dart              # CosGateway 抽象
   test/entry_sync_test.dart
   test/merge_decision_test.dart
   test/sync_protocol_test.dart
   test/interfaces_test.dart             # 抽象契约：测试替身可实现
 ```
 
-> 说明：EmailPasswordProvider 与 fake OSS 实现放客户端（Part 3/4），不放 sync_core——它们依赖 `http`/文件系统。sync_core 只放抽象与纯逻辑，保持"纯 Dart、无框架"约束。
+> 说明：EmailPasswordProvider 与 fake COS 实现放客户端（Part 3/4），不放 sync_core——它们依赖 `http`/文件系统。sync_core 只放抽象与纯逻辑，保持"纯 Dart、无框架"约束。
 
 ---
 
@@ -105,7 +105,7 @@ Expected: FAIL —— `package:sync_core/sync_core.dart` 不存在。
 
 ```yaml
 name: sync_core
-description: "云同步共享纯逻辑包：字段级 LWW 合并、同步协议、鉴权/OSS 抽象。"
+description: "云同步共享纯逻辑包：字段级 LWW 合并、同步协议、鉴权/COS 抽象。"
 publish_to: 'none'
 version: 0.0.1
 
@@ -127,7 +127,7 @@ dev_dependencies:
 /// - tags: List<String>
 /// - dayKey: String
 /// - deletedAt: int?（毫秒；null 表示未删除）
-/// - photo: String?（OSS key；null 表示无照片）
+/// - photo: String?（COS key；null 表示无照片）
 class FieldValue {
   const FieldValue(this.v, this.t);
 
@@ -509,16 +509,16 @@ git commit -m "feat(F013):同步协议与编解码,add sync protocol and codec"
 
 ---
 
-## Task 4: 鉴权与 OSS 抽象接口
+## Task 4: 鉴权与 COS 抽象接口
 
 **Files:**
 - Modify: `packages/sync_core/lib/sync_core.dart`
 - Create: `packages/sync_core/lib/src/auth_provider.dart`
-- Create: `packages/sync_core/lib/src/oss_gateway.dart`
+- Create: `packages/sync_core/lib/src/cos_gateway.dart`
 - Test: `packages/sync_core/test/interfaces_test.dart`
 
 **Interfaces:**
-- Produces: `AuthResult`、`AuthProvider`（抽象）、`OSSGateway`（抽象）。EmailPasswordProvider 与 fake OSS 实现放客户端（Part 3/4），本任务只锁接口契约。
+- Produces: `AuthResult`、`AuthProvider`（抽象）、`CosGateway`（抽象）。EmailPasswordProvider 与 fake COS 实现放客户端（Part 3/4），本任务只锁接口契约。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -542,8 +542,8 @@ void main() {
     });
   });
 
-  group('OSSGateway 契约', () {
-    test('测试替身可实现 OSSGateway', () async {
+  group('CosGateway 契约', () {
+    test('测试替身可实现 CosGateway', () async {
       final g = _FakeOss();
       final key = await g.upload(Uint8List.fromList([1, 2, 3]));
       expect(key, 'key-1');
@@ -566,7 +566,7 @@ class _FakeAuth implements AuthProvider {
   Future<void> signOut() async {}
 }
 
-class _FakeOss implements OSSGateway {
+class _FakeCos implements CosGateway {
   @override
   Future<String> upload(Uint8List bytes) async => 'key-1';
   @override
@@ -580,7 +580,7 @@ class _FakeOss implements OSSGateway {
 - [ ] **Step 2: 运行测试确认失败**
 
 Run: `cd packages/sync_core && dart test test/interfaces_test.dart`
-Expected: FAIL —— `AuthProvider` / `OSSGateway` 未定义。
+Expected: FAIL —— `AuthProvider` / `CosGateway` 未定义。
 
 - [ ] **Step 3: 写实现**
 
@@ -605,21 +605,21 @@ abstract interface class AuthProvider {
 }
 ```
 
-`packages/sync_core/lib/src/oss_gateway.dart`：
+`packages/sync_core/lib/src/cos_gateway.dart`：
 
 ```dart
 import 'dart:typed_data';
 
-/// OSS 直传抽象。fake 实现开发期用；真机阿里云 OSS 时 presign 由服务端生成、
-/// upload/download 由客户端直连 OSS。本接口不依赖任何 SDK。
-abstract interface class OSSGateway {
+/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理读写。
+/// 本接口不依赖任何 SDK。
+abstract interface class CosGateway {
   /// 上传字节，返回可持久化的 key（sha256）。
   Future<String> upload(Uint8List bytes);
 
   /// 按 key 下载字节。
   Future<Uint8List> download(String key);
 
-  /// 生成预签名 URL（真机 OSS 用；fake 可返回本地路径）。
+  /// 生成预签名 URL（真机 COS 用；fake 可返回本地路径）。
   Future<String> presign(String key);
 }
 ```
@@ -628,7 +628,7 @@ Modify `packages/sync_core/lib/sync_core.dart`，在末尾追加：
 
 ```dart
 export 'src/auth_provider.dart';
-export 'src/oss_gateway.dart';
+export 'src/cos_gateway.dart';
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
@@ -662,7 +662,7 @@ git commit -m "feat(F013):client引用sync_core,link sync_core into client"
 
 ## 自检
 
-- **Spec 覆盖**：spec 第 3 节 sync_core 的 entry_sync/merge_decision/sync_protocol/auth_provider/oss_gateway 均有对应任务；EmailPasswordProvider 与 fake OSS 实现按 spec 意图放客户端（Part 3/4），已注明。
+- **Spec 覆盖**：spec 第 3 节 sync_core 的 entry_sync/merge_decision/sync_protocol/auth_provider/cos_gateway 均有对应任务；EmailPasswordProvider 与 fake COS 实现按 spec 意图放客户端（Part 3/4），已注明。
 - **占位符**：无 TBD/TODO，每步含完整代码与命令。
 - **类型一致**：FieldValue/SyncEntry/EntryPatch/SyncPushBatch/SyncPullResponse/SyncCodec 在定义与测试中签名一致；mergeFieldLww 平局取 incoming 与 spec"t 相等取推送方"一致。
 

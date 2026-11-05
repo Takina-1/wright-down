@@ -37,7 +37,7 @@
 | --- | --- |
 | PostgresSyncStore | 服务端仍用 FakeSyncStore（内存），数据库空置 |
 | Token 过期/刷新 | AC-08 未实现，token 永久有效 |
-| 真机阿里云 OSS | 照片走 FakeOSS（本地文件系统） |
+| 真机腾讯云 COS | 照片走 FakeCos（本地文件系统） |
 | 跨设备真机同步 | 需第二台 Android 设备 |
 | 实例变配到 g7.large | e→g 跨规格族不支持，见部署文档第 8 节 |
 
@@ -1260,13 +1260,13 @@ Expected: 返回的 `entries` 中能看到真机刚写的日记，`cursor` 大�
 
 - [ ] **Step 1: 在测试报告新增本轮章节**
 
-记录：执行时间、被测 commit、DP-01~DP-11 逐项的实际输出与结论、已知代价（FakeSyncStore 内存存储、客户端 token 无过期）、未执行项（跨设备真机同步、真机 OSS、DP-09 的落库验证）。
+记录：执行时间、被测 commit、DP-01~DP-11 逐项的实际输出与结论、已知代价（FakeSyncStore 内存存储、客户端 token 无过期）、未执行项（跨设备真机同步、真机 COS、DP-09 的落库验证）。
 
 **未执行的项不得写「通过」**，按项目规范记「未执行」。
 
 - [ ] **Step 2: 更新台账 F013 行**
 
-`docs/features/README.md` 中 F013 状态按实际推进情况更新，注明本轮完成：ECS 部署链路打通 + bcrypt 替换；仍延后：PostgresSyncStore（含 DP-09 落库验证）、真机 OSS、token 刷新、跨设备真机验收。
+`docs/features/README.md` 中 F013 状态按实际推进情况更新，注明本轮完成：ECS 部署链路打通 + bcrypt 替换；仍延后：PostgresSyncStore（含 DP-09 落库验证）、真机 COS、token 刷新、跨设备真机验收。
 
 - [ ] **Step 3: 提交**
 
@@ -1279,7 +1279,7 @@ git commit -m "docs(F013):登记部署链路与bcrypt验收,record deployment ch
 
 ## 11. 已知限制与后续
 
-- 本轮服务端用 FakeSyncStore（内存），重启丢数据；PostgresSyncStore 与真机 OSS 是下一轮
+- 本轮服务端用 FakeSyncStore（内存），重启丢数据；PostgresSyncStore 与真机 COS 是下一轮
 - 客户端 `InMemoryTokenStore`，App 重启需重新登录；token 无过期与刷新（AC-08）仍延后
 - 客户端 release 构建目前用 debug keys 签名，正式发布前需配置真实签名
 - 服务器证书绑死 IP `8.148.158.13`；IP 变更需重签并更新 App 内置 CA
