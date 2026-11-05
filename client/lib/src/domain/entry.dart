@@ -19,7 +19,7 @@ class Entry {
     this.mood,              // 可选；稳定标记字符串，非 emoji
     this.tags = const [],   // 可选；已规范化（trim、去空、去重、保序），默认空列表
     this.photo,             // 可选；照片原始字节（Uint8List?）
-    this.photoKey,          // 可选；照片 OSS key（同步字段），BLOB 留本地不同步
+    this.photoKey,          // 可选；照片 COS key（同步字段），BLOB 留本地不同步
     this.syncStamps = const {}, // 字段级同步时间戳（毫秒），sync 字段名→时间
   });
 
@@ -42,7 +42,7 @@ class Entry {
   /// 这是本地缓存，不参与同步——跨设备通过 [photoKey] 下载。
   final Uint8List? photo;
 
-  /// 照片 OSS key（同步字段）。非空表示照片已上传 OSS，其他设备凭此 key
+  /// 照片 COS key（同步字段）。非空表示照片已上传 COS，其他设备凭此 key
   /// 下载 BLOB 显示；本地 [photo] BLOB 是缓存，不同步。空（null）表示无照片
   /// 或未上传。
   final String? photoKey;

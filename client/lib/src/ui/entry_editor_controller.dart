@@ -43,7 +43,7 @@ class EntryEditorController extends ChangeNotifier {
   List<String> get tags => _tags;
   Uint8List? get photo => _photo;
 
-  /// 照片 OSS key（同步字段）。编辑一条已同步照片的条目时，这个 key 必须
+  /// 照片 COS key（同步字段）。编辑一条已同步照片的条目时，这个 key 必须
   /// 随编辑一起保留——否则保存会把 photoKey 清空，跨设备凭 key 下载照片的
   /// 链路就断了（本机 BLOB 还在、远端却拿不到 key）。
   String? get photoKey => _photoKey;

@@ -66,7 +66,7 @@ void main() {
       final repo =
           SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
       final oss = FakeCos();
-      // 先上传一份照片到 OSS，拿到 key。
+      // 先上传一份照片到 COS，拿到 key。
       final key = await oss.upload(Uint8List.fromList([9, 9, 9]));
       final remote = _FakeRemote();
       remote.nextPull = SyncPullResponse(cursor: 1, entries: [
@@ -90,9 +90,9 @@ void main() {
       final all = await repo.exportAll();
       final e = all.singleWhere((x) => x.id == 'e2');
       expect(e.photoKey, key,
-          reason: 'pull 后 photoKey 必须等于远端字段携带的 OSS key');
+          reason: 'pull 后 photoKey 必须等于远端字段携带的 COS key');
       expect(e.photo, Uint8List.fromList([9, 9, 9]),
-          reason: 'pull 后必须从 OSS 下载 BLOB 落本地 photo');
+          reason: 'pull 后必须从 COS 下载 BLOB 落本地 photo');
       await repo.close();
       await oss.close();
     });

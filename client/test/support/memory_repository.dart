@@ -188,7 +188,7 @@ class MemoryRepository implements LocalEntryRepository {
       createdAt: existing.createdAt,
       updatedAt: stamp,
       dayKey: existing.dayKey,
-      // 照片 OSS key 是同步字段，软删除不碰它：跨设备仍靠 key 下载。
+      // 照片 COS key 是同步字段，软删除不碰它：跨设备仍靠 key 下载。
       photoKey: existing.photoKey,
       // 删除时间记的是删除发生的墙上时间，与版本戳分开。
       deletedAt: now,
@@ -212,7 +212,7 @@ class MemoryRepository implements LocalEntryRepository {
       createdAt: existing.createdAt,
       updatedAt: stamp,
       dayKey: existing.dayKey,
-      // 恢复不碰照片 OSS key：删除标记清了，key 仍保留供跨设备下载。
+      // 恢复不碰照片 COS key：删除标记清了，key 仍保留供跨设备下载。
       photoKey: existing.photoKey,
     );
   }

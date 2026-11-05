@@ -6,7 +6,7 @@
 /// - tags: List<String>
 /// - dayKey: String
 /// - deletedAt: int?（毫秒；null 表示未删除）
-/// - photo: String?（OSS key；null 表示无照片）
+/// - photo: String?（COS key；null 表示无照片）
 class FieldValue {
   const FieldValue(this.v, this.t);
 

@@ -102,7 +102,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
             }
             if (oldVersion < 7) {
               // F013 Part4 的 photo_key 迁移同样幂等：用户若用旧版打开过，
-              // 列可能已在。photo_key 存照片 OSS key（String?），是跨设备同步
+              // 列可能已在。photo_key 存照片 COS key（String?），是跨设备同步
               // 字段；BLOB photo 列留本地不同步，不在此迁移范围。
               final columns = await db.rawQuery('PRAGMA table_info(entries)');
               final hasPhotoKey =
@@ -133,7 +133,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
     // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
     final photo = entry.photo;
-    // photoKey 存 OSS key（TEXT）：null 即清除已有 key。
+    // photoKey 存 COS key（TEXT）：null 即清除已有 key。
     final photoKey = entry.photoKey;
     // 字段级时间戳取 entry.updatedAt（逻辑更新时间），而非 DateTime.now()
     // （物理保存时间）。离线编辑时调用方把 updatedAt 设为编辑时刻，
@@ -215,7 +215,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
     // photo 存 BLOB：sqflite（平台实现与 FFI）都接受 Uint8List，直接传
     // 原始字节。null 即清除照片。不要用 toList()——FFI 不接受 List<int> 作 BLOB。
     final photo = entry.photo;
-    // photoKey 存 OSS key（TEXT）：null 即清除已有 key。
+    // photoKey 存 COS key（TEXT）：null 即清除已有 key。
     final photoKey = entry.photoKey;
     // 版本戳只许增不许减：取 now 与 e.updatedAt 的较大者，设备时钟回拨时
     // 不让 updated_at 倒退。与 softDelete/restore 的口径一致。
@@ -468,7 +468,7 @@ class SqliteEntryRepository implements LocalEntryRepository {
               'tags': jsonEncode(decision.entry.tags),
               // 插入时带上照片：存 BLOB（Uint8List），null 即不带照片。
               'photo': decision.entry.photo,
-              // 插入时带上照片 OSS key：存 TEXT，null 即不带 key。
+              // 插入时带上照片 COS key：存 TEXT，null 即不带 key。
               'photo_key': decision.entry.photoKey,
             });
             inserted++;
