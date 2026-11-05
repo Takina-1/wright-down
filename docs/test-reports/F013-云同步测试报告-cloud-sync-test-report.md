@@ -2,8 +2,8 @@
 
 - 关联需求：[F013 云同步设计](../superpowers/specs/云同步设计-cloud-sync-design.md)
 - 关联计划：sync_core / 服务端 / 客户端同步引擎 / 客户端 UI 与触发 / 照片同步（五份实现计划）
-- 代码状态：`feat/F013-cloud-sync` 分支，30 提交；宿主自动化测试全过
-- 本报告区分宿主自动化验证、Android 构建与真机验收。真机验收未执行。
+- 代码状态：`feat/F013-cloud-sync` 分支；宿主自动化测试全过
+- 本报告分两轮：**第一轮**为宿主自动化验证、Android 构建与真机验收（真机未执行）；**第二轮**为 ECS 部署链路验收（2026-11-05），DP-01 ~ DP-11 逐项见「第二轮」章节，其中 DP-05 / DP-06 因真机未连接记「未执行」。
 
 ## 范围
 
@@ -74,8 +74,10 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 1. **服务端用 FakeSyncStore（内存）**：环境无 postgres/Docker。PostgresSyncStore（真实 SQL + 事务游标，满足 AC-07）延后。服务端逻辑已宿主测试，真实持久化未验证。
 2. **照片用 FakeOSS（本地文件系统）**：环境无阿里云 OSS bucket。真机 OSS 直传（预签名、私有 bucket、境内 region）延后。OSSGateway 抽象已就位，届时替换实现。
 3. **密码哈希是 sha256+salt**：非 bcrypt/argon2。生产部署前必须换。
+   → **第二轮已解决**：服务端改用 bcrypt（cost 10，`$2b` 前缀），见「第二轮」章节。
 4. **Token 无过期/刷新**：InMemoryTokenStore 重启失 token。AC-08 的 refresh 流程未实现。
 5. **baseUrl 硬编码**（`http://10.0.2.2:8080`）：配置化是后续工作。
+   → **第二轮已解决**：改为 `--dart-define=SYNC_BASE_URL` 编译期注入，缺省回落 `http://10.0.2.2:8080`。
 6. **照片设计缺口**：setPhoto 保留旧 photoKey → 同步条目上新选的照片不重传；远端 photoKey 变更不清本地 BLOB 缓存。后续修。
 7. **推送失败静默**：triggerPush 吞掉推送失败，状态显示 synced（违反「不静默失败」）。后续加 push 失败状态。
 
@@ -90,3 +92,99 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 
 - 本机 Dart 3.13.7 SDK 的集合 `==` 是身份比较（非 const 的 `['a'] == ['a']` 为 false）。sync_core FieldValue.== 已加深度比较修复。
 - `dart:crypto` 在本 SDK 缺失，服务端与 FakeOSS 用 `package:crypto`。
+
+---
+
+# 第二轮：ECS 部署链路验收（2026-11-05）
+
+- 关联计划：[云同步-部署链路-ecs-deploy](../superpowers/plans/云同步-部署链路-ecs-deploy.md)
+- 被测 commit：`3ea8e91`（分支 `feat/F013-cloud-sync`）
+- 服务端：阿里云 ECS `i-7xv4buzm47fxdask0bgz`（cn-guangzhou，公网 `8.148.158.13`），Alibaba Cloud Linux 4.0.6 / kernel 6.6.102，Dart SDK `/opt/dart-sdk`
+- 客户端：release APK（`--dart-define=SYNC_BASE_URL=https://8.148.158.13`），小米 2211133C / Android 15
+- 验收项：DP-01 ~ DP-11
+
+## 部署结果
+
+`bash /root/deploy-app.sh` 执行成功：`git clone` → `dart pub get` → `dart analyze`（No issues found）→ `dart test`（28 项全过）→ 编译 `/opt/diary-sync/bin/server` → 安装 systemd 单元 → 健康检查 `本机 8080 返回 401` / `diary-sync 运行中`。
+
+服务进程只监听 `127.0.0.1:8080`，对外由 nginx 提供 443 TLS 反代：
+
+```
+LISTEN 0 128 127.0.0.1:8080  users:(("dart:server",pid=29362,fd=7))
+LISTEN 0 511 0.0.0.0:443      users:(("nginx",pid=29019,fd=6), ...)
+```
+
+## DP 验收结果
+
+| DP | 名称 | 结果 | 实际输出 |
+|---|---|---|---|
+| DP-01 | TLS 证书链校验 | 通过 | `curl --cacert ca.crt https://8.148.158.13/sync?cursor=0` → `401`（握手成功且证书链通过） |
+| DP-02 | 服务端四接口 | 通过 | 注册 → 登录 → 推送 `{"ok":true}` → 拉取 `{"cursor":2,"entries":[{"id":"e-dp-1",...}]}` |
+| DP-03 | 服务自启 | 通过 | `systemctl restart diary-sync` → `active` + 8080 返回 401 |
+| DP-04 | 端口边界 | 通过 | dev 机外部探测：`22 OPEN / 443 OPEN / 8080 CLOSED / 80 CLOSED`；服务端 8080 仅回环可达 |
+| DP-05 | 真机可连 | **未执行** | 真机未连接（USB 拔除）。替代证据见下 |
+| DP-06 | 真机推送 | **未执行** | 真机未连接。替代证据见下 |
+| DP-07 | curl 充当第二设备 | 通过 | 设备B 用另一枚 token 从 `cursor=0` 拉到设备A 推送的 `e-dp-8`（`cursor=2`）；用推进后的 cursor 再拉 → `{"cursor":2,"entries":[]}` |
+| DP-08 | 模拟器不受影响 | 通过 | 静态：`sync_config.dart` 缺省仍为 `http://10.0.2.2:8080`；`network_security_config.xml` 的 `10.0.2.2` 仍在 `cleartextTrafficPermitted="true"` 的 domain-config 内 |
+| DP-09 | 重复注册 → 409 | 通过 | `重复注册返回 409`（DB 级唯一性落库验证未执行，见「已知代价」） |
+| DP-10 | 超长密码 → 400 | 通过 | 73 字节密码注册 → `400`（非 500） |
+| DP-11 | 时序防护 | 通过 | 不存在邮箱 140/119/129 ms vs 错误密码 125/128/127 ms，差异在抖动范围内（bcrypt cost 10） |
+
+## DP-05 / DP-06 未执行说明与替代证据
+
+真机未连接，以下两项按项目规范记「**未执行**」，不计入通过：
+
+- **DP-05 真机可连**：release APK 装到真机后能否连 `https://8.148.158.13` 完成登录（内置 CA 生效、不报证书错误）——**未执行**。
+  替代证据（仅证明信任链材料一致，不替代真机结论）：
+  - APK 内 CA 资源（AGP 混淆后路径 `res/Mc.crt`）与 `deploy/certs/ca.crt` **sha256 完全一致**：`19c76c01be8cbdcefaffd6e421da14db9d0d6119f93e2f70114c67bcd95fa117`
+  - APK `libapp.so` 内含 `https://8.148.158.13`、**不含**默认的 `http://10.0.2.2:8080`（dart-define 生效）
+  - dev 机公网路径 TLS 校验通过（`401` / 登录成功）
+- **DP-06 真机推送**：真机写一篇日记并触发推送、服务端可查到该条目——**未执行**。
+  替代证据：请求层（与 App 同一 sync_core 协议、同样的字段形状）全链路通过。
+
+## 请求层全链路验证输出（替代 DP-05/DP-06/DP-07 的协议部分）
+
+设备A 登录 → 推送 → 设备B 重新登录（另一枚 token）→ 拉取：
+
+```
+T1 设备A登录 uid=u0 tokenLen=48
+T2 设备A推送 {"ok":true}
+T3 设备B登录 uid=u0 tokenLen=48 与A不同=yes
+T4 设备B全量拉取 {"cursor":2,"entries":[{"id":"e-dp-8","createdAt":1793862888729,
+   "fields":{"content":{"v":"验证日记","t":1793862888729},"mood":{"v":"开心","t":1793862888729}}}]}
+   e-dp-8出现次数=1 cursor=2
+T5 设备B增量拉取 {"cursor":2,"entries":[]}
+T6 设备B推送更新字段 {"ok":true}
+T7 设备A增量拉取 {"cursor":3,"entries":[{"id":"e-dp-8",...,"fields":{"content":{"v":"验证日记",...},"mood":{"v":"平静","t":1793862948729}}}]}
+T8a 设备B推送软删除 {"ok":true}
+T8b 设备A拉取软删除 {"cursor":4,"entries":[{"id":"e-dp-8",...,"fields":{...,"deletedAt":{"v":1793863008729,"t":1793863008729}}}]}
+T9 鉴权边界 无token=401 错误token=401
+```
+
+额外覆盖：**字段级 LWW**（设备B 更新 mood → 设备A 拉到 `mood=平静`，`content` 保留原值）、**软删除传播**（`deletedAt` 能同步到另一设备）、**鉴权边界**、**外部 80/8080 端口不通**。
+
+dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返回对方推送的条目。
+
+## 本轮关键变更
+
+- **bcrypt 替换 sha256**（Task 2）：`hashPassword` / `verifyPassword`，cost 10、`$2b` 前缀、72 字节上限；`users` 表去掉 `salt` 列（schema.sql 同步）。不存在邮箱也执行一次等价 bcrypt 以抹平时序差异。
+- **消除邮箱枚举**（评审发现）：`login` 对已注册邮箱 + 超 72 字节密码原会因 `verifyPassword` 吞掉 `ArgumentError` 返回 401（而未注册邮箱返回 400），状态码泄露注册状态。修：`login` 先做长度预检抛 `ArgumentError` → 400，附回归测试。
+- **客户端配置化**（Task 5）：`SYNC_BASE_URL` 编译期注入 + 网络安全配置（系统 CA 与自签 CA 并列追加，不顶掉系统信任库）。
+- **部署产物**（Task 6）：nginx TLS 配置、systemd 单元（含 `ProtectSystem=full` / `NoNewPrivileges` / `PrivateTmp` 加固）、幂等部署脚本。
+
+## 已知代价
+
+1. **服务端仍是 FakeSyncStore（内存）**：进程重启后账号与全部同步数据清空（本次验证中已实际发生一次——服务重启后 `dp@local.test` 不存在，需重新注册）。PostgresSyncStore 未接入，生产不可用。
+2. **DP-09 的 DB 级落库验证未执行**：当前只验到 409 行为，bcrypt 哈希是否真的以 `$2b$` 形式落进 `users.password_hash` 未验（需 PostgresSyncStore 接入后补）。
+3. **证书绑死 IP** `8.148.158.13`，且 CA 私钥只在开发机；IP 变更需重签并重新发版 APK。
+4. **release APK 仍用 debug keys 签名**，正式发布前需配置真实签名。
+5. **服务端 nginx 已被公网扫描器探测到**（日志见 `195.96.139.110` 扫 `/` → 404）；当前未做额外加固，仅 443 对外且需证书。
+6. **实例规格**：`ecs.e-c1m1.large`（1.6 GiB 突发型），正式承载数据库前建议变配到 `ecs.g7.large`（跨规格族不可直接变配）。
+7. **真机 OSS**、**token 刷新（AC-08）**、**真机端到端验收**均未执行/未实现。
+
+## 本轮结论
+
+- 通过：DP-01、DP-02、DP-03、DP-04、DP-07、DP-08、DP-09、DP-10、DP-11（9 项）。
+- 未执行：DP-05、DP-06（真机未连接）；DP-09 的 DB 落库部分；真机 OSS；跨设备真机同步。
+- 是否满足全部必需验收项：**否**。真机相关的 DP-05 / DP-06 未执行，不计入通过；其余部署链路验收项全部通过。
+- 下一步：连接真机补做 DP-05 / DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证与真机 OSS；实现 token 刷新（AC-08）。
