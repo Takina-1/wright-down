@@ -1284,3 +1284,5 @@ git commit -m "docs(F013):登记部署链路与bcrypt验收,record deployment ch
 - 客户端 release 构建目前用 debug keys 签名，正式发布前需配置真实签名
 - 服务器证书绑死 IP `8.148.158.13`；IP 变更需重签并更新 App 内置 CA
 - 实例仍是 `ecs.e-c1m1.large`（1.6 GiB 突发型），正式承载数据库前建议变配到 `ecs.g7.large`
+
+> 本轮未完成项的逐条登记见 [F013 待办登记表](../../features/F013-待办-todos.md)（含真机验收未执行项、服务端内存存储、token 刷新等）。
