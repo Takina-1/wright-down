@@ -1588,7 +1588,7 @@ Run:
 ```bash
 grep -rn "OSSGateway\|FakeOSS\|oss_gateway\|fake_oss\|_InMemoryOSS\|_FakeOss" client/ packages/ deploy/ docs/ --include="*.dart" --include="*.md" --include="*.yaml" --include="*.json"
 ```
-Expected: 仅命中本计划文档与 COS 设计文档自身（它们记录改名前的旧名）。代码文件（`*.dart`）**零命中**。
+Expected: 仅命中本计划文档与 COS 设计文档自身（它们记录改名前的旧名）。代码文件（`*.dart`）**零命中**。`deploy/腾讯云COS配置-tencent-cos-setup.md` 里的 `CosGateway` 是**新名**，不匹配本模式。
 
 - [ ] **Step 2: 全仓库搜索残留 OSS 表述**
 
@@ -1596,7 +1596,16 @@ Run:
 ```bash
 grep -rn "OSS" docs/ deploy/ --include="*.md" --include="*.json" --include="*.sh"
 ```
-Expected: 仅命中**本计划文档**与 **COS 设计文档**（两者都记录了「从阿里云 OSS 改为腾讯云 COS」的来龙去脉，属有意保留）。其余文件零命中——包括 `deploy/阿里云部署-aliyun-deploy.md`、`deploy/ram-policy.json`、`deploy/deploy-app.sh`、`deploy/nginx/diary-sync.conf`（实测这 4 个文件本来就不含 OSS 字样）。
+Expected: 仅命中**三个有意保留的文件**：
+
+1. `docs/superpowers/plans/2026-11-05-腾讯云COS对象存储-tencent-cos-storage.md` —— 本计划文档自身。
+2. `docs/superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md` —— COS 设计文档。
+3. `deploy/腾讯云COS配置-tencent-cos-setup.md` —— 新增的运维文档，有 **3 处** OSS 字样，均为**历史或对照说明**：
+   - 第 5 行「对象存储：**腾讯云 COS**（原设计为阿里云 OSS，2026-11-05 变更）」——记录变更来龙去脉。
+   - 第 78 行「§9 的成本估算「COS ~50」沿用原阿里云 OSS 的量级假设」——说明估算来源。
+   - 第 101 行「腾讯云的签名算法与阿里云 OSS 不同，不能直接搬」——技术对照，防移植踩坑。
+
+其余文件零命中——包括 `deploy/阿里云部署-aliyun-deploy.md`、`deploy/ram-policy.json`、`deploy/deploy-app.sh`、`deploy/nginx/diary-sync.conf`（实测这 4 个文件本来就不含 OSS 字样）。
 
 - [ ] **Step 3: 三包静态分析**
 
