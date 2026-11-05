@@ -37,7 +37,7 @@ F013 设计里的照片同步走「服务端代理对象存储」，原定对象
 - 官方建议用 **STS 临时密钥**而非永久密钥；有效期尽量短。
 - SDK 默认签名会签入 `Host` header；不签入 Host 可能导致请求失败。
 - 单个预签名上传最大支持 **5GB**；代理上传还需注意 ECS 侧 `client_max_body_size`（当前 nginx 配置为 **8m**），超过 8 MB 的照片会被 nginx 拒绝——见 §5 已知限制。
-- **Dart 生态注意**：pub.dev 上**没有腾讯云官方 COS Dart SDK**。可用的是社区包 `tencent_cos_dart`（0.1.x，非官方）与插件 `tencentcloud_cos_sdk_plugin`（含 `getPresignedUrl`，面向 Flutter 端）。服务端若走 HTTP 直调 COS，可用 `package:crypto` 自行实现 COS 签名（`q-sign-algorithm=sha1`），避免引入非官方依赖。
+- **Dart 生态注意**：pub.dev 上**没有纯 Dart 的官方 COS SDK**（不依赖 Flutter 的官方实现）。`tencentcloud_cos_sdk_plugin` 是**腾讯云官方**发布的 Flutter 插件（含 `getPresignedUrl`），面向客户端 Flutter 应用；`tencent_cos_dart`（0.1.x）是**社区包**，非官方。**本项目两者都不采用**——D-07 架构下客户端不集成任何云存储 SDK（凭证只存服务端，客户端走 ECS 代理），服务端是纯 Dart、官方 Flutter 插件不适用。服务端若走 HTTP 直调 COS，可用 `package:crypto` 自行实现 COS 签名（`q-sign-algorithm=sha1`），避免引入非官方依赖。
 
 ### 3.2 数据路径：ECS 代理收发字节（D-07）
 
@@ -104,8 +104,8 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 - 不同存储类型的容量包不能混用；存储容量包暂不支持抵扣多 AZ 存储类型。
 - 抵扣顺序：免费额度包 → 自购包（同为自购包时先到期先抵扣）→ 按量计费。
 - 存储容量包**每日**按当天平均存储量抵扣；流量包/请求包**每月**重置抵扣额度，当月未用完不累计。
-- 资源包**有地域限制**（「中国大陆通用」/「中国香港及境外通用」两档），不支持金融云地域。
-- **用户需核实已购容量包的地域规格**：若买的是指定地域包而桶建在别的地域则不抵扣。
+- 资源包**有地域限制**，中国大陆通用包可抵扣 ap-guangzhou 的用量；若买到的是**指定地域**规格的包，则必须与桶所在地域一致才抵扣（不支持金融云地域）。
+- **核实已购容量包的地域规格**——买成境外地域包则不抵扣大陆桶。
 
 ### 3.5 CAM 最小权限
 
