@@ -37,7 +37,7 @@ Phase 4 第一里程碑：邮箱+密码最小身份、同步引擎（字段级 L
 
 ### pre-existing analyze warning（非 F013 引入）
 
-- `client/lib/src/ui/home_page.dart:41` `unused_field _undoableEntryId`（来自 F005 commit 43dfe46）。
+- `client/lib/src/ui/home_page.dart:51` `unused_field _undoableEntryId`（来自 F005 commit 43dfe46）。
 - `client/test/data/sync/sync_engine_stamps_test.dart` 两个 unused import。
 
 ### 关键修复记录

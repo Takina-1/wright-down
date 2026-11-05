@@ -61,7 +61,7 @@ Expected: `R packages/sync_core/lib/src/oss_gateway.dart -> packages/sync_core/l
 ```dart
 import 'dart:typed_data';
 
-/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
+/// COS 访问抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
 /// 读写（本接口不依赖任何 SDK）。
 abstract interface class CosGateway {
   /// 上传字节，返回可持久化的 key（sha256）。
@@ -1002,7 +1002,7 @@ T-05 与 T-24 两行、T-25 行已在本计划的 Task 6 之前由设计阶段�
 |---|---|
 | `Entry 加 photoKey（OSS key，同步字段）` | `Entry 加 photoKey（COS key，同步字段）` |
 | `FakeOSS 实现 OSSGateway` | `FakeCos 实现 CosGateway` |
-| `走 OSS 直传` | `走 COS 直传` |
+| `走 OSS 直传` | `经服务端代理 COS` |
 | `上传 OSS 得 key` | `上传 COS 得 key` |
 | `真机阿里云 OSS 延后` | `真机腾讯云 COS 延后` |
 | `sync_core \`OSSGateway\`` | `sync_core \`CosGateway\`` |
@@ -1037,7 +1037,7 @@ T-05 与 T-24 两行、T-25 行已在本计划的 Task 6 之前由设计阶段�
 | `测试替身 FakeOSS 注入 SyncEngine。` | `测试替身 FakeCos 注入 SyncEngine。` |
 | `触发一次 oss.download 并 setState 显示` | `触发一次 cos.download 并 setState 显示` |
 | `composer 内部的 \`oss.download\`` | `composer 内部的 \`cos.download\`` |
-| `**Spec 覆盖**：spec 第 6 节（照片走 OSS 直传、sha256 key、预签名）` | `**Spec 覆盖**：spec 第 6 节（照片走 COS 直传、sha256 key、服务端代理）` |
+| `**Spec 覆盖**：spec 第 6 节（照片走 OSS 直传、sha256 key、预签名）` | `**Spec 覆盖**：spec 第 6 节（照片经服务端代理 COS、sha256 key）` |
 | `**类型一致**：photoKey/photo/OSSGateway/FakeOSS 签名在实现与测试一致。` | `**类型一致**：photoKey/photo/CosGateway/FakeCos 签名在实现与测试一致。` |
 | `真机阿里云 OSS（预签名直传、私有 bucket）延后到 bucket 就绪。` | `真机腾讯云 COS（服务端代理读写、私有 bucket）延后到 bucket 就绪。` |
 
@@ -1172,7 +1172,7 @@ abstract interface class OSSGateway {
 ```
 改为：
 ```dart
-/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理读写。
+/// COS 访问抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理读写。
 /// 本接口不依赖任何 SDK。
 abstract interface class CosGateway {
 ```
@@ -1506,23 +1506,24 @@ ECS 代理方案下，服务端还要代理照片字节收发，不再只是「�
 
 > 不要动同段落的另外两条铁律（UI 层不直接碰 RemoteRepo、写入只走 LocalRepo、Domain 层不 import 任何框架/SDK）——它们仍然成立。
 
-- [ ] **Step 4: 修正代码里最后一处「直传」表述**
+- [ ] **Step 4: 核对代码里没有残留「直传」表述**
 
-`packages/sync_core/lib/src/cos_gateway.dart` 第 3–4 行现在是：
+「直传」是旧架构（客户端直连对象存储）的说法，与已确定的 ECS 代理架构矛盾——Task 6 已把全部文档里的「直传」改为「经服务端代理」，代码注释也要一致。
 
-```dart
-/// COS 直传抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
-/// 读写（本接口不依赖任何 SDK）。
-```
-
-「直传」是旧架构（客户端直连对象存储）的说法，与已确定的 ECS 代理架构矛盾——Task 6 已把全部文档里的「直传」改为「经服务端代理」，这里要保持一致。改为：
+`packages/sync_core/lib/src/cos_gateway.dart` 第 3–4 行应为：
 
 ```dart
 /// COS 访问抽象。fake 实现开发期用；真机腾讯云 COS 时由服务端代理 COS
 /// 读写（本接口不依赖任何 SDK）。
 ```
 
-> 只改这一处注释文字，**不动接口声明、方法签名、方法体**——那些是 Task 1 已评审通过的内容。
+Run:
+```bash
+grep -rn "直传" packages/sync_core/lib/ client/lib/ packages/server/lib/ --include="*.dart"
+```
+Expected: 零命中。
+
+> 只核对这一处注释文字，**不动接口声明、方法签名、方法体**——那些是 Task 1 已评审通过的内容。
 
 - [ ] **Step 5: 更新文档总索引**
 
@@ -1597,14 +1598,15 @@ Run:
 ```bash
 grep -rn "OSS" docs/ deploy/ --include="*.md" --include="*.json" --include="*.sh"
 ```
-Expected: 仅命中**三个有意保留的文件**：
+Expected: 仅命中**四个**有意保留的文件：
 
 1. `docs/superpowers/plans/2026-11-05-腾讯云COS对象存储-tencent-cos-storage.md` —— 本计划文档自身。
 2. `docs/superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md` —— COS 设计文档。
-3. `deploy/腾讯云COS配置-tencent-cos-setup.md` —— 新增的运维文档，有 **3 处** OSS 字样，均为**历史或对照说明**：
+3. `docs/test-reports/F013-云同步测试报告-cloud-sync-test-report.md` —— 测试报告第三轮的命名对照表，合法保留改名前的旧标识符。
+4. `deploy/腾讯云COS配置-tencent-cos-setup.md` —— 新增的运维文档，有 **3 处** OSS 字样，均为**历史或对照说明**：
    - 第 5 行「对象存储：**腾讯云 COS**（原设计为阿里云 OSS，2026-11-05 变更）」——记录变更来龙去脉。
-   - 第 78 行「§9 的成本估算「COS ~50」沿用原阿里云 OSS 的量级假设」——说明估算来源。
-   - 第 101 行「腾讯云的签名算法与阿里云 OSS 不同，不能直接搬」——技术对照，防移植踩坑。
+   - 第 84 行「§9 的成本估算「COS ~50」沿用原阿里云 OSS 的量级假设」——说明估算来源。
+   - 第 107 行「腾讯云的签名算法与阿里云 OSS 不同，不能直接搬」——技术对照，防移植踩坑。
 
 其余文件零命中——包括 `deploy/阿里云部署-aliyun-deploy.md`、`deploy/ram-policy.json`、`deploy/deploy-app.sh`、`deploy/nginx/diary-sync.conf`（实测这 4 个文件本来就不含 OSS 字样）。
 

@@ -82,6 +82,9 @@ entries  (id, user_id, payload JSONB, seq BIGSERIAL)
 ## 6. 照片同步
 
 - `CosGateway` 抽象：`upload(bytes)→key`、`download(key)→bytes`、`presign(key)→url`
+
+> `presign` 在 D-07（经 ECS 代理）架构下**客户端侧没有真实用途**——预签名是给「客户端直连 COS」用的。本轮保留它是为接口兼容，真机服务端代理不使用它；是否移除留待 T-24 的接口变更决策。
+
 - **Fake COS**：本地文件系统模拟（开发/测试用），不依赖云
 - 流程：选照片 → 算 sha256 → `CosGateway.upload` 上传（fake 写本地临时区）→ 得 key → `entry.photo = key` → 同步传播 key
 - 其他设备拉取 → 见 key → `CosGateway.download`（fake 读本地）

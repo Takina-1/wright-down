@@ -47,8 +47,8 @@
 | T-20 | CA-pair guard 只查 `ca.key` 不查 `ca.crt` | `deploy/make-cert.sh` | 上次签发失败残留时需手动清理 |
 | T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 服务异常返回非 401 时脚本仍继续 |
 | T-22 | `deploy-app.sh` 无执行位（用法为 `bash deploy-app.sh`，功能无碍） | `deploy/deploy-app.sh` | 报告措辞与实际不一致 |
-| T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:41` | 来自 F005（非 F013 引入），合并前应清理 |
-| T-25 | **ECS 公网带宽不足**：实测出向 ~428 KB/s（3.4 Mbps）、入向 ~10 Mbps。ECS 代理方案下下载一张 4 MB 照片约 10 秒，100 张批量同步约 16 分钟 | 已实测记录 | 已知限制，用户已知悉并选择维持 ECS 代理 | 缓解方向见 COS 设计 §9（客户端上传前压缩最有效）；或在 T-24 一并评估升配/加带宽 | COS 设计 §3.3 |
+| T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:51` | 来自 F005（非 F013 引入），合并前应清理 |
+| T-25 | **ECS 公网带宽不足**：实测出向 ~428 KB/s（3.4 Mbps）、入向 ~10 Mbps。ECS 代理方案下下载一张 4 MB 照片约 10 秒，100 张批量同步约 16 分钟 | `docs/superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md` §3.3 | 已知限制，用户已知悉并选择维持 ECS 代理。缓解方向见同文档 §9（客户端上传前压缩最有效）；或在 T-24 一并评估升配/加带宽 |
 
 ## 合并门槛
 
