@@ -1344,6 +1344,7 @@ git commit -m "docs(F013):文档对象存储表述统一为腾讯云COS,unify do
 - Create: `deploy/腾讯云COS配置-tencent-cos-setup.md`
 - Create: `deploy/cam-policy.json`
 - Modify: `docs/README.md`
+- Modify: `docs/产品设计-product-design.md`（补充一处架构表述）
 
 **Interfaces:**
 - Consumes: 设计文档 §3.1–§3.6 的全部结论
@@ -1455,6 +1456,8 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 
 **一份照片的下载付两份流量费**，存储容量包一份都不抵扣。
 
+> 注：`docs/产品设计-product-design.md` §9 的成本估算「COS ~50」沿用原阿里云 OSS 的量级假设。ECS 代理后跨厂商公网中转会产生两次出向流量，实际月成本需在有真实流量数据后复核。
+
 ### 实测带宽（2026-11-05，`8.148.158.13`）
 
 | 路径 | 实测速度 | 换算 |
@@ -1486,7 +1489,23 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 真机验收时注意：**2024-01-01 后创建的桶不支持用默认域名在浏览器直接预览文件**，验收要靠 App 内流程，不能靠浏览器打开默认域名看图。
 ````
 
-- [ ] **Step 3: 更新文档总索引**
+- [ ] **Step 3: 补一句服务端职责的准确表述**
+
+`docs/产品设计-product-design.md` 第 46 行现在是：
+
+```markdown
+- 本地库是唯一真相源，服务器只做同步管道
+```
+
+ECS 代理方案下，服务端还要代理照片字节收发，不再只是「同步管道」。这一行是跨功能架构的核心表述，需要保持准确。改为：
+
+```markdown
+- 本地库是唯一真相源，服务器只做同步管道与照片字节代理（见 §4）
+```
+
+> 不要动同段落的另外两条铁律（UI 层不直接碰 RemoteRepo、写入只走 LocalRepo、Domain 层不 import 任何框架/SDK）——它们仍然成立。
+
+- [ ] **Step 4: 更新文档总索引**
 
 `docs/README.md` 的「按问题找文档」表格，在「如何准备 OPPO 上架」那一行之后新增一行：
 
@@ -1507,7 +1526,7 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 
 > 注：`docs/README.md` 里的链接指向 `../deploy/`（仓库根下的 deploy 目录），不是 `docs/deploy/`。
 
-- [ ] **Step 4: 校验 JSON 与链接**
+- [ ] **Step 5: 校验 JSON 与链接**
 
 Run:
 ```bash
@@ -1527,10 +1546,10 @@ ls deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json
 ```
 Expected: 两个文件都存在。
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
-git add deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json docs/README.md
+git add deploy/腾讯云COS配置-tencent-cos-setup.md deploy/cam-policy.json docs/README.md docs/产品设计-product-design.md
 git commit -m "docs(F013):新增腾讯云COS配置文档与CAM策略,add tencent cos setup doc and cam policy"
 ```
 
