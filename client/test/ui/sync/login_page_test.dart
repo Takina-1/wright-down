@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/data/sync/sync_engine.dart';
-import 'package:local_diary/src/data/sync/fake_oss.dart';
+import 'package:local_diary/src/data/sync/fake_cos.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/ui/sync/login_page.dart';
 import 'package:sync_core/sync_core.dart';
@@ -45,7 +45,7 @@ class _FakeSyncEngine extends SyncEngine {
         repository: MemoryRepository(),
         remote: _NoopRemote(),
         auth: _FakeAuth(),
-        oss: FakeOSS(),
+        oss: FakeCos(),
         now: () => DateTime.now(),
       );
 

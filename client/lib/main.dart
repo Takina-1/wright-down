@@ -9,7 +9,7 @@ import 'src/config/sync_config.dart';
 import 'src/data/local/sqlite_entry_repository.dart';
 import 'src/data/remote/email_password_provider.dart';
 import 'src/data/remote/remote_repo.dart';
-import 'src/data/sync/fake_oss.dart';
+import 'src/data/sync/fake_cos.dart';
 import 'src/data/sync/sync_engine.dart';
 
 void main() {
@@ -41,9 +41,9 @@ class _StartupState extends State<_Startup> {
       repository: repository,
       remote: RemoteRepo(httpClient, baseUrl, const SyncCodec()),
       auth: auth,
-      // FakeOSS 是开发期占位实现（本地临时目录）；真机 OSS 直传网关待后续
+      // FakeCos 是开发期占位实现（本地临时目录）；真机 COS 网关待后续
       // Part 接入后替换。
-      oss: FakeOSS(),
+      oss: FakeCos(),
       now: DateTime.now,
     );
     // 启动即拉一次 + 开启 5 分钟周期拉取。未登录时 triggerPull 内部

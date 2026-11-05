@@ -3,16 +3,16 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:sync_core/sync_core.dart';
 
-/// 本地文件系统实现 [OSSGateway]（开发/测试用）。
+/// 本地文件系统实现 [CosGateway]（开发/测试用）。
 ///
 /// upload 计算字节的 sha256 作为 key，写入 `<root>/<key>`；download 按 key
 /// 读取字节；presign 返回 `fake://<root>/<key>` 假 URL。不依赖任何云 SDK。
 ///
 /// [root] 默认在系统临时目录下创建；可通过构造参数注入指定目录（如测试夹具）。
 /// [close] 删除底层目录——仅用于开发/测试清理，勿对真实项目目录调用。
-class FakeOSS implements OSSGateway {
-  FakeOSS({Directory? root})
-      : _root = root ?? Directory.systemTemp.createTempSync('fakeoss');
+class FakeCos implements CosGateway {
+  FakeCos({Directory? root})
+      : _root = root ?? Directory.systemTemp.createTempSync('fakecos');
 
   final Directory _root;
 

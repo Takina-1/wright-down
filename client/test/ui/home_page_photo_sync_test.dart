@@ -36,14 +36,14 @@ class _FakeAuth implements AuthProvider {
 
 /// 内存版 OSS 替身：upload 返回递增 key 并记下字节，download 按 key 取回。
 ///
-/// 不用 [FakeOSS]（真实文件 I/O）的原因：widget 测试跑在 FakeAsync 上，
+/// 不用 [FakeCos]（真实文件 I/O）的原因：widget 测试跑在 FakeAsync 上，
 /// `File.readAsBytes` 的延续不会在 `pumpAndSettle` 时排空——只有
 /// `tester.runAsync` 直接 await 才能拿到结果，而 composer 内部的
 /// `oss.download` 是 fire-and-forget，延续永远排不上空。预解析的
 /// `Future.value` 走微任务队列，能被 `pumpAndSettle` 排空，行为等价
 /// （按 key 返回字节），适合驱动 UI。真实 I/O 路径由 sync_engine 层的
 /// `test()` 覆盖（见 sync_engine_photo_test.dart）。
-class _InMemoryOSS implements OSSGateway {
+class _InMemoryOSS implements CosGateway {
   final Map<String, Uint8List> _store = {};
   int _seq = 0;
 

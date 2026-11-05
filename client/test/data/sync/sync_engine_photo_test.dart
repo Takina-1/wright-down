@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/data/sync/sync_engine.dart';
-import 'package:local_diary/src/data/sync/fake_oss.dart';
+import 'package:local_diary/src/data/sync/fake_cos.dart';
 import 'package:local_diary/src/data/local/sqlite_entry_repository.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -37,7 +37,7 @@ void main() {
     test('push 上传本地 photo 设 photoKey', () async {
       final repo =
           SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
-      final oss = FakeOSS();
+      final oss = FakeCos();
       final remote = _FakeRemote();
       final engine = SyncEngine(
         repository: repo,
@@ -65,7 +65,7 @@ void main() {
     test('pull 下载远端 photoKey 的 BLOB', () async {
       final repo =
           SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
-      final oss = FakeOSS();
+      final oss = FakeCos();
       // 先上传一份照片到 OSS，拿到 key。
       final key = await oss.upload(Uint8List.fromList([9, 9, 9]));
       final remote = _FakeRemote();

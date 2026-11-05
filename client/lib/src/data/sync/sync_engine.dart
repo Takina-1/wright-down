@@ -40,7 +40,7 @@ class SyncEngine {
   final LocalEntryRepository repository;
   final SyncRemote remote;
   final AuthProvider auth;
-  final OSSGateway oss;
+  final CosGateway oss;
 
   // 预留给未来时间戳需求（如记录 lastSyncedAt）；当前触发循环与退避
   // 不读当前时间，故字段仍未被读取。
