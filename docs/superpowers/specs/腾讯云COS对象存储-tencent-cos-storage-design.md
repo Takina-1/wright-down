@@ -113,6 +113,7 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 
 - CAM 控制台用户策略的 action 前缀是 `name/cos:`（桶策略/元素参考文档用 `cos:`，写错不生效）。
 - 授 `name/cos:PutObject` + `name/cos:GetObject`，**不授 DeleteObject**，防止凭据泄露后数据被批量删除。
+- **必须加 `name/cos:HeadObject`**：腾讯云把 HEAD Object 与 GET Object 拆成两个独立授权项，只授 `GetObject` 时子账号发 HEAD 会 403。服务端读对象前会先发 HEAD（秒传判存、SDK 高级下载接口都会），这一项是读路径必需的——与「不授 DeleteObject」是两回事。
 - resource 精确到桶内前缀：`qcs::cos:ap-guangzhou:uid/<APPID>:<BUCKET>-<APPID>/<PREFIX>/*`。
 - 所有键必须全小写（`version` / `principal` / `statement` / `effect` / `action` / `resource` / `condition`）。
 - 避免 `action: "*"` 与 `resource: "*"`。
@@ -139,7 +140,7 @@ COS 的内网 endpoint 只对**同地域腾讯云 CVM** 免费开放。本项目
 | `SyncEngine.oss` 字段 / 构造参数 `oss:` | `cos` / `cos:` | 7 个 dart 文件：`sync_engine.dart`、`home_page.dart`、`main.dart` + 5 个测试文件（`sync_engine_test.dart`、`sync_engine_photo_test.dart`、`sync_engine_runtime_test.dart`、`sync_engine_stamps_test.dart`、`home_page_photo_sync_test.dart`、`login_page_test.dart`） |
 | `_InMemoryOSS` | `_InMemoryCos` | `client/test/ui/home_page_photo_sync_test.dart` |
 | `_FakeOss` | `_FakeCos` | `packages/sync_core/test/interfaces_test.dart` |
-| 注释「照片 OSS key」 | 「照片 COS key」 | `entry.dart`、`sqlite_entry_repository.dart`、`memory_repository.dart` |
+| 注释「照片 OSS key」 | 「照片 COS key」 | `entry.dart`、`sqlite_entry_repository.dart`、`entry_editor_controller.dart`、`memory_repository.dart` |
 | `sync_core/pubspec.yaml` 描述「鉴权/OSS 抽象」 | 「鉴权/COS 抽象」 | 1 |
 
 **不改动**：

@@ -5,7 +5,8 @@
       "effect": "allow",
       "action": [
         "name/cos:PutObject",
-        "name/cos:GetObject"
+        "name/cos:GetObject",
+        "name/cos:HeadObject"
       ],
       "resource": [
         "qcs::cos:ap-guangzhou:uid/<APPID>:<BUCKET>-<APPID>/<PREFIX>/*"
