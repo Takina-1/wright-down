@@ -1,0 +1,22 @@
+[Unit]
+Description=F013 云同步服务端 (Dart shelf)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=diary
+Group=diary
+WorkingDirectory=/opt/diary-sync
+EnvironmentFile=-/etc/diary-sync/server.env
+ExecStart=/opt/diary-sync/bin/server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/diary-sync
+
+[Install]
+WantedBy=multi-user.target

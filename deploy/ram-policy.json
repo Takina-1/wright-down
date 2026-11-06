@@ -1,0 +1,45 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs-workbench:LoginECSInstance",
+        "ecs-workbench:ChatMessages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeCloudAssistantStatus",
+        "ecs:StartTerminalSession"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ram:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ram:ServiceName": "workbench.ecs.aliyuncs.com"
+        }
+      }
+    },
+    {
+      "Sid": "ReadOnlyInstanceInspection",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstanceAttribute",
+        "ecs:DescribeDisks",
+        "ecs:DescribeResourcesModification",
+        "ecs:DescribeInstanceTypes",
+        "ecs:DescribeRegions",
+        "ecs:DescribeZones"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

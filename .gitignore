@@ -86,3 +86,8 @@ Thumbs.db
 Desktop.ini
 ehthumbs.db
 $RECYCLE.BIN/
+
+# TLS 证书与私钥：本地生成，CA 私钥永不入库
+deploy/certs/
+*.key
+*.pem

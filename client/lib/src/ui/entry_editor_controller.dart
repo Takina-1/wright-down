@@ -36,11 +36,17 @@ class EntryEditorController extends ChangeNotifier {
   String? _mood;
   List<String> _tags = const [];
   Uint8List? _photo;
+  String? _photoKey;
 
   String get content => _content;
   String? get mood => _mood;
   List<String> get tags => _tags;
   Uint8List? get photo => _photo;
+
+  /// 照片 COS key（同步字段）。编辑一条已同步照片的条目时，这个 key 必须
+  /// 随编辑一起保留——否则保存会把 photoKey 清空，跨设备凭 key 下载照片的
+  /// 链路就断了（本机 BLOB 还在、远端却拿不到 key）。
+  String? get photoKey => _photoKey;
   SaveStatus get status => _status;
   String? get error => _error;
 
@@ -148,6 +154,7 @@ class EntryEditorController extends ChangeNotifier {
         mood: _mood,
         tags: _tags,
         photo: _photo,
+        photoKey: _photoKey,
       );
       _status = SaveStatus.saving;
       _error = null;
@@ -188,6 +195,7 @@ class EntryEditorController extends ChangeNotifier {
     _mood = null;
     _tags = const [];
     _photo = null;
+    _photoKey = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -205,6 +213,7 @@ class EntryEditorController extends ChangeNotifier {
     _mood = _savedMood = entry.mood;
     _tags = _savedTags = entry.tags;
     _photo = _savedPhoto = entry.photo;
+    _photoKey = entry.photoKey;
     _persisted = true;
     _error = null;
     _deleteError = null;
@@ -261,6 +270,7 @@ class EntryEditorController extends ChangeNotifier {
     _mood = null;
     _tags = const [];
     _photo = null;
+    _photoKey = null;
     _persisted = false;
     _error = null;
     _deleteError = null;
@@ -286,6 +296,7 @@ class EntryEditorController extends ChangeNotifier {
     _mood = null;
     _tags = const [];
     _photo = null;
+    _photoKey = null;
     _persisted = false;
     _error = null;
     _deleteError = null;

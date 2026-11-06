@@ -43,7 +43,7 @@
 - 差异化不在"功能全"，在别人不愿做的脏活
 
 ### 2. 架构：Local-First
-- 本地库是唯一真相源，服务器只做同步管道
+- 本地库是唯一真相源，服务器只做同步管道与照片字节代理（见 §4）
 - 三条铁律：
   1. UI 层不直接碰 RemoteRepo
   2. 写入只走 LocalRepo，同步是异步旁路
@@ -51,7 +51,7 @@
 
 ### 3. 语音链路：端侧录音 + 云端转写 + 本地双写
 - 端侧 ASR 先转写 → 文本立刻入库（保证离线可写）
-- 音频上传 OSS（私有 bucket，预签名 URL）
+- 音频上传 COS（私有 bucket，服务端代理读写）
 - 云端 ASR 异步精修 → 用户确认后替换
 - 字段：`content` / `rawTranscript`(本地) / `audioUri`(本地) / `cloudAudioKey` / `cloudTranscript` / `transcriptSource`
 - 同步只传 `content` + `cloudAudioKey` + `cloudTranscript`
@@ -63,7 +63,7 @@
 - 增量协议：`GET /sync?cursor=<seq>` 拉取，`POST /sync/batch` 推送
 - 冲突：**字段级 LWW**，每字段单独存 updatedAt，绝不整条覆盖
 - 删除也要带时间戳：`{v: null, t: ts}`，不能用「key 不存在」表示
-- 图片：sha256 秒传 → 预签名 URL 直传 OSS → 库里只存 key
+- 图片：sha256 秒传 → **经服务端代理 COS**（客户端 ↔ ECS ↔ COS）→ 库里只存 key
 - 软删（deletedAt）+ 同步删除标记
 
 ### 5. 回顾模块
@@ -73,7 +73,7 @@
 - 查询用冗余 `dayKey` 字段（`"2026-10-23"`）命中索引
 
 ### 6. 录音上云的合规要求
-- OSS 必须私有 bucket，音频访问单独鉴权（不能拿到日记列表就能拉所有音频）
+- COS 必须私有 bucket，音频访问单独鉴权（不能拿到日记列表就能拉所有音频）
 - 首次启动隐私政策弹窗 + 首次点录音**单独同意弹窗**（不可合并）
 - 设置里提供「云端同步录音」开关，可随时关闭
 - 全部存储于中国大陆境内；转写用国内厂商（阿里云/腾讯云 ASR），不用 OpenAI Whisper
@@ -106,12 +106,12 @@
 - **游标用服务端单调递增 seq（BIGSERIAL），不用时间戳** ← 关键设计
 - 每次写入/合并都赋新 seq，保证其他设备能拉到
 - Entry 用 JSONB payload 存字段级 `{v, t}`，加字段无需 migration
-- 部署：单机 + Docker Compose（Postgres + API + Nginx），OSS 托管，不上 K8s
+- 部署：单机 + Docker Compose（Postgres + API + Nginx），COS 托管，不上 K8s
 - **API 只有 4 个**：`/auth/register`、`/auth/sms`、`/auth/login`、`GET /sync?cursor=N`、`POST /sync/batch`
 - 认证：Access Token 30 天 + Refresh Token 90 天滑动续期；token 存 Keychain/Keystore（不存 SharedPreferences）
-- 备份：Postgres 每日 pg_dump → OSS，保留 30 天；每月手动完整导出。⚠️ 备份数据也要境内，注销时含备份一并清除
+- 备份：Postgres 每日 pg_dump → COS，保留 30 天；每月手动完整导出。⚠️ 备份数据也要境内，注销时含备份一并清除
 - **所有回顾/统计/随机/热力图 100% 客户端算**，服务端永远不读用户内容
-- 成本：轻量 2核4G ~100元/月 + OSS ~50 + 短信 0.04/条 + 域名 ~100/年 ≈ **150 元/月**
+- 成本：轻量 2核4G ~100元/月 + COS ~50 + 短信 0.04/条 + 域名 ~100/年 ≈ **150 元/月**
 
 ### 10. SyncEngine 状态机 ✅ 同意建议
 - **三个独立循环**：写循环（用户驱动，最高优先级，永不失败）/ 推循环（后台）/ 拉循环（后台）
@@ -231,7 +231,7 @@
 | 1 | 本地写入 + 时间轴列表 + 隐私页 | 1–2 周 |
 | 2 | 完整备份与恢复（F004）+ 心情打卡 + 语音输入 + 随手拍 + 标签 | 1–2 周 |
 | 3 | 回顾模块（随机/连续天数/热力图） | 1 周 |
-| 4 | 账号 + 同步 + 图片直传 OSS | 2 周 |
+| 4 | 账号 + 同步 + 图片经服务端代理 COS | 2 周 |
 | 5 | 打磨（性能/动效/Widget/深色模式） | 持续 |
 
 > Phase 4 之前不需要服务器 → 可零合规成本验证产品是否成立。

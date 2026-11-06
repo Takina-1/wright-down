@@ -9,16 +9,26 @@ import '../domain/entry.dart';
 import '../domain/export/file_gateway.dart';
 import '../domain/local_entry_repository.dart';
 import '../domain/mood.dart';
+import '../data/sync/sync_engine.dart';
 import 'entry_editor_controller.dart';
 import 'local_data_page.dart';
+import 'sync/sync_status_indicator.dart';
 import 'timeline_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.repository, this.fileGateway});
+  const HomePage({
+    super.key,
+    required this.repository,
+    this.fileGateway,
+    this.syncEngine,
+  });
   final LocalEntryRepository repository;
 
   /// 文件出口。默认用系统实现，测试可以注入替身。
   final FileGateway? fileGateway;
+
+  /// 同步引擎。为空时 composer 不显示同步状态、flush 不触发推送、前台不触发拉取。
+  final SyncEngine? syncEngine;
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -39,6 +49,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// 用户的点击会落到提示条上而不是按钮上（真机上表现为「下一条」点了没反应，
   /// 或者误触「撤销」把刚删掉的记录又恢复回来）。
   String? _undoableEntryId;
+
+  /// 从 COS 下载回来的照片字节（photo=null 但 photoKey 存在时用）。
+  ///
+  /// 编辑一条远端拉下来的条目时，本地 photo BLOB 可能还没缓存（只有
+  /// photoKey）。composer 凭 photoKey 向 COS 下载一份临时字节显示缩略图；
+  /// 不写回仓储（写回由 SyncEngine.pullOnce 负责），仅作显示用。
+  Uint8List? _remotePhoto;
+
+  /// 已经触发下载的 photoKey。非 null 表示该 key 的下载已发起（在途或完成），
+  /// 避免编辑器每次通知都重新触发下载。
+  String? _downloadedKey;
   @override
   void initState() {
     super.initState();
@@ -64,15 +85,79 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         selection: TextSelection.collapsed(offset: _editor.content.length),
       );
     }
+    _syncRemotePhoto();
     setState(() {});
+  }
+
+  /// 同步「远端照片」下载状态：本地有 BLOB 就用本地；本地没有但 photoKey
+  /// 存在就向 COS 下载一份临时字节显示；都没有就清空。
+  ///
+  /// 编辑器每次变更都会通知（_changed），这里用 [_downloadedKey] 记住
+  /// 已发起下载的 key，避免每个按键都重新下载。
+  void _syncRemotePhoto() {
+    final photo = _editor.photo;
+    final key = _editor.photoKey;
+    final engine = widget.syncEngine;
+    if (photo != null) {
+      // 本地 BLOB 在场：直接用它，不需要远端下载。
+      if (_downloadedKey != null || _remotePhoto != null) {
+        _downloadedKey = null;
+        _remotePhoto = null;
+      }
+      return;
+    }
+    if (key == null || engine == null) {
+      if (_downloadedKey != null || _remotePhoto != null) {
+        _downloadedKey = null;
+        _remotePhoto = null;
+      }
+      return;
+    }
+    if (_downloadedKey == key) return; // 已在下载中或已完成。
+    _downloadedKey = key; // 标记在途，避免重复触发。
+    unawaited(_fetchRemotePhoto(key));
+  }
+
+  /// 按 photoKey 从 COS 下载照片字节，下载成功后 setState 显示。
+  ///
+  /// 下载期间用户可能换了照片或 photoKey：只在本地仍无 BLOB 且 key 未变
+  /// 时才显示，避免迟到的下载盖掉用户刚选的新照片。
+  Future<void> _fetchRemotePhoto(String key) async {
+    try {
+      final bytes = await widget.syncEngine!.cos.download(key);
+      if (!mounted) return;
+      if (_editor.photo != null || _editor.photoKey != key) return;
+      setState(() => _remotePhoto = bytes);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _remotePhoto = null;
+        _downloadedKey = null;
+      });
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
-      unawaited(_editor.flush());
+      // 退到后台/失焦前落盘，落盘成功后触发一次推送（防抖合并多次写入）。
+      unawaited(_flushAndPush());
+    } else if (state == AppLifecycleState.resumed) {
+      // 回到前台拉一次远端变更；未登录时 triggerPull 内部 _me() 返回 null 提前退出。
+      final engine = widget.syncEngine;
+      if (engine != null) unawaited(engine.triggerPull());
     }
+  }
+
+  /// 落盘并触发推送：flush 成功才 triggerPush（失败的写入不推）。
+  ///
+  /// triggerPush 自身 30 秒防抖，多次调用会合并为一次往返，故在
+  /// _selectTab/_exit/后台落盘三处复用本方法无需额外节流。
+  Future<bool> _flushAndPush() async {
+    final saved = await _editor.flush();
+    if (saved) widget.syncEngine?.triggerPush();
+    return saved;
   }
 
   Future<void> _selectTab(int tab) async {
@@ -80,7 +165,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _transitioning = true;
     });
-    final saved = await _editor.flush();
+    final saved = await _flushAndPush();
     if (!mounted) return;
     setState(() {
       _transitioning = false;
@@ -311,7 +396,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _transitioning = true;
     });
-    final saved = await _editor.flush();
+    final saved = await _flushAndPush();
     if (!mounted) return;
     if (saved) {
       await SystemNavigator.pop();
@@ -373,6 +458,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _ => LocalDataPage(
             repository: widget.repository,
             fileGateway: widget.fileGateway,
+            syncEngine: widget.syncEngine,
+            auth: widget.syncEngine?.auth,
           ),
         },
       ),
@@ -411,6 +498,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       SaveStatus.saved => '已保存',
       SaveStatus.error => '保存失败',
     };
+    final thumbBytes = _editor.photo ?? _remotePhoto;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
       child: Column(
@@ -434,6 +522,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Icons.spa_outlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
+              if (widget.syncEngine != null)
+                StreamBuilder<SyncState>(
+                  stream: widget.syncEngine!.stateChanged,
+                  initialData: widget.syncEngine!.state,
+                  builder: (context, snapshot) => SyncStatusIndicator(
+                    state: snapshot.data ?? SyncState.idle,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -470,7 +566,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ],
           ),
-          if (_editor.photo != null)
+          if (thumbBytes != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GestureDetector(
@@ -489,7 +585,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                       ),
                       child: Image.memory(
-                        _editor.photo!,
+                        thumbBytes,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) =>
                             const Center(child: Text('图片无法显示')),
@@ -564,7 +660,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             TextButton(
-              onPressed: _transitioning ? null : () => _editor.flush(),
+              onPressed: _transitioning ? null : () => unawaited(_flushAndPush()),
               child: const Text('重试保存'),
             ),
           ],

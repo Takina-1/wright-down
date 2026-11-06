@@ -13,6 +13,14 @@
 | 仓库地址、技术栈与许可是什么 | [开源仓库资料](开源仓库-open-source-repositories.md) | 来源事实、许可证与未核实事项 |
 | 功能是否通过测试、还有什么问题 | [测试报告索引](test-reports/README.md) | 测试环境、结果、缺陷与限制 |
 | 如何准备 OPPO 上架 | [OPPO 上架合规清单](OPPO上架清单-oppo-release-checklist.md) | 上架准备，提审前核对官方规则 |
+| 如何部署服务端、配置对象存储 | [部署与云资源配置](../deploy/阿里云部署-aliyun-deploy.md) | ECS 实例、nginx、systemd，以及 COS 桶、凭证、资源包 |
+
+## 部署文档
+
+服务端与对象存储的部署配置在 [`deploy/`](../deploy/) 目录：
+
+- [阿里云部署](../deploy/阿里云部署-aliyun-deploy.md)：ECS 实例、镜像选型、初始化脚本、nginx 与 systemd、带宽与变配
+- [腾讯云 COS 配置](../deploy/腾讯云COS配置-tencent-cos-setup.md)：存储桶、CAM 凭证与最小权限策略、资源包与抵扣范围、跨厂商成本与实测带宽
 
 ## 新功能使用的模板
 
