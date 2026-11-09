@@ -173,6 +173,12 @@ class HttpCosStore implements CosObjectStore {
       await response.stream.drain<void>();
       return null;
     }
+    if (response.statusCode != 200) {
+      // 非 200（403/5xx 等）不能把错误响应体当数据返回：先丢弃并抛错，
+      // 由 handler 统一归一为 502 + 日志。
+      await response.stream.drain<void>();
+      throw StateError('cos get failed: HTTP ${response.statusCode}');
+    }
     final chunks = <int>[];
     await for (final c in response.stream) {
       chunks.addAll(c);
