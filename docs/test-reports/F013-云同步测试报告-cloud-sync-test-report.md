@@ -245,3 +245,44 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 
 - ECS 上重新部署执行新脚本（文档化的健康检查断言/权限链路尚未在 ECS 实测，T-21 记「已改待部署」）。
 - DP-05 / DP-06 真机验收（真机仍未连接）、真机 COS（T-05 / T-24 未启动）。
+
+---
+
+## 第五轮：腾讯云 COS 代理实现与 ECS 冒烟（2026-11-10）
+
+- 关联：[COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) · [待办](../features/F013-待办-todos.md)
+- 被测 commit：`9fa68f5`（分支 `feat/F013-cos-proxy`）；ECS 部署镜像 = 同分支
+- 凭证：COS 桶 `write-down-1341994447`（ap-guangzhou，私有）；CAM 子用户最小权限（PutObject/GetObject/HeadObject，仅 `photos/*`）；密钥仅存 ECS `/etc/diary-sync/cos.env`（0600），不入库、不下发客户端
+
+### 实现
+
+- 服务端 `packages/server/lib/src/cos_proxy.dart`：腾讯云 COS v1 签名（`q-sign-algorithm=sha1`，对照官方 SDK `cos-go-sdk-v5 auth.go` 逐行验证）+ 照片代理端点：
+  - `POST /sync/photo/upload`：body = 照片字节 → 服务端算 sha256 → 签名 PUT `photos/<sha256>` → 返回 `{"ok":true,"key":...}`
+  - `GET /sync/photo/<key>`：签名 GET 透传字节
+  - `HEAD /sync/photo/<key>`：秒传判存 → 200 / 404
+  - 全部端点走与 `/sync` 相同的 Bearer token 鉴权；COS 调用异常归一为 502 并打日志
+- 客户端 `client/lib/src/data/sync/cos_gateway_http.dart`：`HttpCosGateway`（`--dart-define=USE_COS_HTTP=true` 启用，缺省回落 FakeCos），零云 SDK、零预签名。
+- 部署：nginx `client_max_body_size` 8m → 16m；`diary-sync.service` 新增 `EnvironmentFile=-/etc/diary-sync/cos.env`；`deploy-app.sh` 编译前先停服务（避免 ETXTBSY）。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| server `dart analyze` / `dart test` | No issues found / 48 项全过 |
+| client `flutter analyze` / `flutter test` | 仅 pre-existing 警告 / 447 项全过 |
+| ECS 部署（deploy-app.sh 全链路） | 拉分支 → pub get → analyze → 48 测试 → 编译 → 安装 → 重启 → 健康检查 401 全过 |
+| ECS 冒烟（真实 COS） | 注册 → 上传 `{"ok":true,"key":"photos/b84a387b…"}` → 下载字节与原文件 `cmp` 一致 → HEAD 判存 200 / 404 全过 |
+
+### 冒烟中暴露并修复的缺陷（回归测试已补）
+
+- **D-01**：COS URL 缺主机/路径分隔符（`myqcloud.comphotos`）→ DNS 失败（`144ef0e`）
+- **D-02**：systemd unit 行内中文注释使 `EnvironmentFile` 被静默跳过，COS 凭证不加载（`7d22850`）
+- **D-03**：`getObject` 对非 200 状态把 COS 错误响应体当数据返回（`c2bd43a`）
+- **D-04**：签名 `uriPath` 缺前导 `/`，与请求路径不一致 → SignatureDoesNotMatch 403（`093efdf`）
+- **D-05**：shelf_router 通配路由误用 `<...>`（应为正则参数 `<any|.*>`）→ 下载/判存 404（`9fa68f5`）
+
+### 未执行
+
+- 真机双设备照片同步验收（T-24 真机子项）：需连真机 + `--dart-define=USE_COS_HTTP=true` 构建 release APK；T-01/T-02 真机验收同轮补做。
+- 客户端上传前压缩（T-25 缓解）并入真机轮评估。
+- 冒烟残留对象（`photos/probe.txt`、`photos/b84a387b…`）：CAM 策略刻意不授 DeleteObject，清理走控制台单独流程。

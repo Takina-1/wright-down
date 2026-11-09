@@ -12,13 +12,15 @@ F013 云同步的对象存储侧配置说明。ECS 服务端部署见 [阿里云
 
 | 项 | 状态 |
 |---|---|
-| COS 桶 | **未创建**（F013 待办 T-05） |
-| CAM 子用户与策略 | 未创建（T-05） |
-| 服务端凭证落地 | 未完成（T-05） |
-| 服务端代理端点 | 未实现（T-24） |
-| 客户端真机版 `CosGateway` | 未实现（T-24） |
+| COS 桶 | **已创建**：`write-down-1341994447`（ap-guangzhou，私有） |
+| CAM 子用户与策略 | **已创建并绑定**：PutObject/GetObject/HeadObject，仅 `photos/*`（`deploy/cam-policy.json` 已填真实值） |
+| 服务端凭证落地 | **已完成**：`/etc/diary-sync/cos.env`（0600，diary 用户） |
+| 服务端代理端点 | **已实现**（v1 签名，ECS 冒烟通过） |
+| 客户端真机版 `CosGateway` | **已实现**（`HttpCosGateway`，`--dart-define=USE_COS_HTTP=true` 启用），真机验收待下一轮 |
 | 标准存储容量包 | **已购买**（抵扣标准存储容量费） |
 | 外网下行流量包 | 未购买（流量按量付费） |
+
+> **部署注意（本机实测）**：`diary-sync.service` 里 `EnvironmentFile=-/etc/diary-sync/cos.env` 这行**不要写行内中文注释**——systemd 会静默跳过该指令、凭证不加载（表现为服务日志打「未检测到 COS_* 环境变量」）。注释必须写成独立的 `#` 行，且 unit 文件注释保持 ASCII。
 
 ## 2. 建桶与配置
 
