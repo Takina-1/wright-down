@@ -5,7 +5,6 @@ import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 import 'package:server/server.dart';
-import 'package:sync_core/sync_core.dart';
 
 /// 假 COS 通道：不触网，记录 put/get 调用供断言。
 class _FakeCosStore implements CosObjectStore {
