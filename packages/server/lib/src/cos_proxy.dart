@@ -141,6 +141,31 @@ abstract interface class CosObjectStore {
   Future<Uint8List?> getObject(String key);
 }
 
+/// 对一次 COS 请求生成签名头。uriPath 必须与请求 URI 的路径一致
+/// （含前导 '/'，与 Go SDK 的 req.URL.Path 一致）；漏掉斜杠会
+/// SignatureDoesNotMatch（本冒烟实测）。
+Map<String, String> cosSignForRequest(
+    CosCredentials credentials,
+    String method,
+    String key,
+    String contentType,
+    {int? contentLength,
+    int? signTimeStart,
+    int? signTimeEnd}) {
+  final now = signTimeStart ?? DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  return cosV1AuthHeaders(
+    method: method,
+    uriPath: '/$key',
+    host: credentials.host,
+    contentType: contentType,
+    secretId: credentials.secretId,
+    secretKey: credentials.secretKey,
+    signTimeStart: now,
+    signTimeEnd: signTimeEnd ?? now + _signExpireSeconds,
+    contentLength: contentLength,
+  );
+}
+
 /// 基于 package:http 的 COS 调用实现（与客户端同栈）。
 class HttpCosStore implements CosObjectStore {
   HttpCosStore(this._credentials, {http.Client? client})
@@ -194,20 +219,9 @@ class HttpCosStore implements CosObjectStore {
 
   Map<String, String> _sign(
       String method, String key, String contentType,
-      {int? contentLength}) {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    return cosV1AuthHeaders(
-      method: method,
-      uriPath: key,
-      host: _credentials.host,
-      contentType: contentType,
-      secretId: _credentials.secretId,
-      secretKey: _credentials.secretKey,
-      signTimeStart: now,
-      signTimeEnd: now + _signExpireSeconds,
-      contentLength: contentLength,
-    );
-  }
+      {int? contentLength}) =>
+      cosSignForRequest(_credentials, method, key, contentType,
+          contentLength: contentLength);
 }
 
 /// 签名有效期（秒），与腾讯云建议一致：密钥只在短窗口内有效，被截获

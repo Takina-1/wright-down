@@ -116,6 +116,48 @@ void main() {
           containsAll(['Authorization', 'Content-Type', 'Host']));
       expect(headers['Host'], host);
     });
+
+    test('contentLength 参与签名：header-list 含 content-length', () {
+      final h = cosV1AuthHeaders(
+        method: 'PUT',
+        uriPath: '/photos/abc',
+        host: host,
+        contentType: 'application/octet-stream',
+        secretId: ak,
+        secretKey: sk,
+        signTimeStart: 1700000000,
+        signTimeEnd: 1700000900,
+        contentLength: 27,
+      );
+      final auth = h['Authorization']!;
+      expect(auth, contains('q-header-list=content-length;content-type;host'));
+    });
+
+    test('cosSignForRequest：uriPath 带前导斜杠，与不带斜杠的签名不同', () {
+      // 回归：签名 uriPath 漏前导 '/' 曾导致真实 COS 返回 403。
+      const creds = CosCredentials(
+          bucket: 'my-bucket-1300000000', secretId: ak, secretKey: sk);
+      final a = cosSignForRequest(
+        creds, 'PUT', 'photos/abc', 'application/octet-stream',
+        contentLength: 27,
+        signTimeStart: 1700000000,
+        signTimeEnd: 1700000900,
+      );
+      final withoutSlash = cosV1AuthHeaders(
+        method: 'PUT', uriPath: 'photos/abc', host: host,
+        contentType: 'application/octet-stream', secretId: ak, secretKey: sk,
+        signTimeStart: 1700000000, signTimeEnd: 1700000900,
+        contentLength: 27,
+      );
+      final withSlash = cosV1AuthHeaders(
+        method: 'PUT', uriPath: '/photos/abc', host: host,
+        contentType: 'application/octet-stream', secretId: ak, secretKey: sk,
+        signTimeStart: 1700000000, signTimeEnd: 1700000900,
+        contentLength: 27,
+      );
+      expect(a['Authorization'], isNot(withoutSlash['Authorization']));
+      expect(a['Authorization'], withSlash['Authorization']);
+    });
   });
 
   group('照片代理端点', () {
