@@ -8,8 +8,8 @@
 --   sync_seq(id, value)                        -- 全局单调 seq 计数器
 --
 -- 与设计文档的两处偏差（有意为之，理由见注释）：
---   1. entries 主键用 (user_id, id) 而非单列 id。FakeSyncStore 的 _entries 以 p.id
---      全局索引，跨用户同 id 会互相覆盖 —— 那是内存实现的缺陷，真实库不能照抄。
+--   1. entries 主键用 (user_id, id) 而非单列 id，与 FakeSyncStore 条目按 (userId, id)
+--      复合键存储的口径一致（跨用户同 id 不互相覆盖）。
 --   2. seq 用 sync_seq 行锁自增而非 BIGSERIAL。序列 nextval 在事务提交前就分配，
 --      客户端可能先拉到 seq=6 却漏掉仍未提交的 seq=5，cursor 直接跳过。改用
 --      "UPDATE sync_seq SET value = value + 1 ... RETURNING value"，行锁持有到提交，
