@@ -4,24 +4,44 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_router/shelf_router.dart';
 
+import 'cos_proxy.dart';
 import 'fake_sync_store.dart';
 import 'handlers.dart';
 import 'server_config.dart';
 import 'sync_store.dart';
 
-/// 装配 4 个路由。生产用 PostgresSyncStore；本 Part 用 FakeSyncStore（内存）。
-Handler createApp(SyncStore store) {
+/// 装配同步路由；凭证齐全时加挂照片代理路由（T-24）。
+/// COS 凭证经环境变量注入（COS_BUCKET/COS_SECRET_ID/COS_SECRET_KEY），
+/// 缺失时只挂同步路由（开发/无对象存储模式）。
+/// [gateway] 仅测试注入用；生产从凭证构造真实 HttpCosStore。
+Handler createApp(SyncStore store,
+    {CosCredentials? cos, PhotoGateway? gateway}) {
   final router = Router()
     ..post('/auth/register', registerHandler(store))
     ..post('/auth/login', loginHandler(store))
     ..get('/sync', pullHandler(store))
     ..post('/sync/batch', pushHandler(store));
+
+  if (cos != null) {
+    final g = gateway ?? PhotoGateway(prefix: cos.prefix, cos: HttpCosStore(cos));
+    router
+      ..post('/sync/photo/upload', photoUploadHandler(store, g))
+      // shelf_router 通配路由用正则参数 /<any|.*>（不是 <...>）。
+      ..get('/sync/photo/<any|.*>', photoDownloadHandler(store, g))
+      ..head('/sync/photo/<any|.*>', photoExistsHandler(store, g));
+  }
   return router;
 }
 
 /// 启动服务。监听地址与端口由环境变量决定，默认只绑回环。
-Future<void> serveDiarySync({Map<String, String>? env, SyncStore? store}) async {
-  final cfg = ServerConfig.fromEnv(env ?? Platform.environment);
+Future<void> serveDiarySync(
+    {Map<String, String>? env, SyncStore? store}) async {
+  final e = env ?? Platform.environment;
+  final cfg = ServerConfig.fromEnv(e);
   final s = store ?? FakeSyncStore();
-  await serve(createApp(s), cfg.host, cfg.port);
+  final cos = CosCredentials.fromEnv(e);
+  if (cos == null) {
+    print('[warn] 未检测到 COS_* 环境变量，跳过照片代理路由');
+  }
+  await serve(createApp(s, cos: cos), cfg.host, cfg.port);
 }

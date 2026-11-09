@@ -7,7 +7,8 @@ import 'sync_store.dart';
 Future<Map<String, dynamic>> _json(Request req) async =>
     jsonDecode(await req.readAsString()) as Map<String, dynamic>;
 
-String? _bearer(Request req) {
+/// 从 `Authorization: Bearer <token>` 提取 token。无 / 格式不合法返回 null。
+String? bearerToken(Request req) {
   final h = req.headers['authorization'];
   if (h is! String) return null;
   final m = RegExp(r'^Bearer (.+)$').firstMatch(h);
@@ -49,7 +50,7 @@ Handler loginHandler(SyncStore store) => (req) async {
 };
 
 Handler pullHandler(SyncStore store) => (req) async {
-  final token = _bearer(req);
+  final token = bearerToken(req);
   if (token == null) return _err(401, 'missing token');
   final userId = await store.userIdForToken(token);
   if (userId == null) return _err(401, 'invalid token');
@@ -59,7 +60,7 @@ Handler pullHandler(SyncStore store) => (req) async {
 };
 
 Handler pushHandler(SyncStore store) => (req) async {
-  final token = _bearer(req);
+  final token = bearerToken(req);
   if (token == null) return _err(401, 'missing token');
   final userId = await store.userIdForToken(token);
   if (userId == null) return _err(401, 'invalid token');

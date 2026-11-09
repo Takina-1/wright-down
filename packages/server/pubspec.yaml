@@ -1,5 +1,5 @@
 name: server
-description: "云同步服务端：鉴权 + 同步接口（字段级 LWW 合并）。"
+description: "云同步服务端：鉴权 + 同步接口 + 腾讯云 COS 照片代理。"
 publish_to: 'none'
 version: 0.0.1
 
@@ -10,6 +10,8 @@ dependencies:
   shelf: ^1.4.0
   shelf_router: ^1.1.0
   bcrypt: ^1.2.0
+  crypto: ^3.0.5
+  http: ^1.2.0
   sync_core:
     path: ../sync_core
 

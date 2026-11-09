@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-09（含第四轮在线修复：FakeSyncStore 条目隔离缺陷关闭、T-21 已改待部署）
+- 最后更新：2026-11-10（第五轮：COS 代理实现与 ECS 冒烟通过；T-05 完成、T-24 代码侧完成）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -13,8 +13,8 @@
 | T-02 | **DP-06 真机推送**：真机写一篇日记并触发推送，服务端能查到该条目 | 未执行 | 同 T-01 | App 内新建并保存日记 → 服务端用 curl 查该条目 | 部署计划 Task 8 Step 4 |
 | T-03 | **DP-09 落库验证**：bcrypt 哈希以 `$2b$` 形式落进 `users.password_hash`，DB 级邮箱唯一性约束生效 | 未执行 | 服务端仍是 FakeSyncStore（内存），无真实 DB | 接入 PostgresSyncStore 后查 `select email, password_hash from users` | 部署计划 DP-09 |
 | T-04 | 真机端到端跨设备同步（含照片） | 未执行 | 无真机 + 无真实 COS | T-01 / T-02 完成后补做 | 设计 AC-03 / AC-06 |
-| T-05 | **建桶 + CAM 凭证**：腾讯云 COS ap-guangzhou 私有桶、CAM 子用户 + bucket 级最小权限策略（只授 PutObject/GetObject，不授 DeleteObject）、密钥只存 ECS 服务端环境变量 | 未执行 | 桶尚未创建 | 控制台建桶 → 写 `deploy/cam-policy.json` → 建子用户绑定策略 → 密钥写入 ECS 环境变量 | [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) §3.4 |
-| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 未执行 | 依赖 T-05 + 无真机 | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 8 MB 请求体上限** | COS 设计 §3.2 / §3.3 |
+| T-05 | **建桶 + CAM 凭证**：腾讯云 COS ap-guangzhou 私有桶、CAM 子用户 + bucket 级最小权限策略（只授 PutObject/GetObject，不授 DeleteObject）、密钥只存 ECS 服务端环境变量 | 已完成 | 2026-11-10 冒烟通过：桶/凭证/策略生效，密钥落 /etc/diary-sync/cos.env（0600） | 控制台建桶 → 写 `deploy/cam-policy.json` → 建子用户绑定策略 → 密钥写入 ECS 环境变量 | [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) §3.4 |
+| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 代码侧完成 | 服务端代理端点 + 客户端 `HttpCosGateway` 实现完毕，ECS 冒烟（注册→上传→下载比对→HEAD 判存）通过；**真机双设备验收下一轮** | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 请求体上限（已调至 16m）** | COS 设计 §3.2 / §3.3 |
 
 ## B. 功能延后（未实现）
 
@@ -55,6 +55,7 @@
 | 编号 | 事项 | 状态 | 依据 | 关联 |
 |---|---|---|---|---|
 | T-26 | **FakeSyncStore 跨用户条目覆盖缺陷**：条目主键 (user_id, id) 与 schema.sql 一致，用户 id 分配不再占用条目 seq | 已关闭 | 服务端 31 项测试全过（新增 3 项回归，2026-11-09）；schema.sql 头部注释同步更新 | 缺陷修复；测试报告「第四轮」 |
+| T-27 | **第五轮 COS 代理缺陷修复**：URL 主机/路径分隔符缺失、systemd 行内中文注释跳过 EnvironmentFile、getObject 非 200 返回错误体、签名 uriPath 缺前导斜杠、shelf_router 通配符语法 | 已关闭 | 各 commit `144ef0e`/`7d22850`/`c2bd43a`/`093efdf`/`9fa68f5`；回归测试已补；ECS 真实 COS 冒烟通过 | 缺陷修复；测试报告「第五轮」 |
 
 ## 合并门槛
 
@@ -65,6 +66,8 @@ F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若�
 **功能负责人裁决（2026-11-06）**：T-01 / T-02 真机验收**留到下一轮**，本轮先合入 `main`。本轮合入的是**对象存储供应商迁移与命名对齐**（腾讯云 COS + ECS 代理路径），宿主侧证据齐全（sync_core 13 + server 31 + client 442 = 486 项测试全过、三包静态分析与基线一致、调试 APK 构建成功），且**纯机械重命名、零行为变动**；真机验收的缺失不影响这部分成果的可信度。
 
 **第四轮裁决（2026-11-09）**：FakeSyncStore 复合键缺陷修复 + deploy-app.sh 健康检查加固**合入 `main`**。依据：服务端 31 项测试全过（含新增 3 项回归，无对外行为新增）、`bash -n` 语法通过、测试报告与台账已更新；ECS 部署实测与 DP-05/DP-06 真机验收仍记「未执行」，不以此掩盖。
+
+**第五轮裁决（2026-11-10）**：COS 代理代码侧完成并经 ECS 真实 COS 冒烟（注册→上传→下载字节比对→HEAD 判存 200/404 全过）**合入 `main`**。依据：server 48 项 / client 447 项测试全过、三包静态分析干净、部署脚本全链路绿、签名被真实 COS 接受。**真机双设备验收（T-24 真机子项）与 T-01/T-02 真机验收留到下一轮**（当前无真机连接）；客户端上传前压缩（T-25 缓解）同样并入真机轮评估。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 

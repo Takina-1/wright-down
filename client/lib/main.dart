@@ -9,12 +9,30 @@ import 'src/config/sync_config.dart';
 import 'src/data/local/sqlite_entry_repository.dart';
 import 'src/data/remote/email_password_provider.dart';
 import 'src/data/remote/remote_repo.dart';
+import 'src/data/sync/cos_gateway_http.dart';
 import 'src/data/sync/fake_cos.dart';
 import 'src/data/sync/sync_engine.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const _Startup());
+}
+
+/// 真机照片网关选择：`--dart-define=USE_COS_HTTP=true` → HttpCosGateway
+/// （照片经 ECS 代理读写 COS）；缺省 FakeCos（模拟器/开发）。
+CosGateway _buildCos(http.Client httpClient, String baseUrl,
+    EmailPasswordProvider auth) {
+  if (const bool.fromEnvironment('USE_COS_HTTP', defaultValue: false)) {
+    return HttpCosGateway(
+      baseUrl: baseUrl,
+      tokenLoader: () async {
+        final me = await auth.current();
+        return me?.token;
+      },
+      client: httpClient,
+    );
+  }
+  return FakeCos();
 }
 
 class _Startup extends StatefulWidget {
@@ -41,9 +59,10 @@ class _StartupState extends State<_Startup> {
       repository: repository,
       remote: RemoteRepo(httpClient, baseUrl, const SyncCodec()),
       auth: auth,
-      // FakeCos 是开发期占位实现（本地临时目录）；真机 COS 网关待后续
-      // Part 接入后替换。
-      cos: FakeCos(),
+      // FakeCos 是开发期占位实现（本地临时目录）；真机经
+      // `--dart-define=USE_COS_HTTP=true` 切到 HttpCosGateway（照片走
+      // ECS 代理读写 COS，凭证只在服务端）。
+      cos: _buildCos(httpClient, baseUrl, auth),
       now: DateTime.now,
     );
     // 启动即拉一次 + 开启 5 分钟周期拉取。未登录时 triggerPull 内部
