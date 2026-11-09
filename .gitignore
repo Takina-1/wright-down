@@ -68,6 +68,10 @@ coverage/
 secrets.*
 **/secrets.json
 
+# COS 凭证草稿（source/cos.md）与临时探针：永不入库，只在 ECS 环境变量注入
+source/
+packages/server/tool_*.dart
+
 # Claude Code 本地设置（settings.json 等可提交，settings.local.json 不提交）
 .claude/settings.local.json
 .claude/worktrees/
