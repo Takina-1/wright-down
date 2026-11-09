@@ -269,5 +269,30 @@ void main() {
       final j = await _json(res);
       expect(j['key'], startsWith('photos/'));
     });
+
+    test('createApp：通配路由 GET/HEAD 命中下载与判存 handler', () async {
+      final r = await store.register('i@b.com', 'pw');
+      final fake = _FakeCosStore();
+      fake.objects['photos/x'] = Uint8List.fromList('v'.codeUnits);
+      final app = createApp(
+        store,
+        cos: const CosCredentials(
+            bucket: 'my-bucket',
+            secretId: 'AKID',
+            secretKey: 'SK',
+            prefix: 'photos'),
+        gateway: PhotoGateway(prefix: 'photos', cos: fake),
+      );
+      // GET 通配路由：带 key 的路径应命中下载 handler（而非 404）。
+      final getRes = await app(_req(
+          'GET', '/sync/photo/photos/x',
+          headers: {'authorization': 'Bearer ${r.token}'}));
+      expect(getRes.statusCode, 200);
+      // HEAD 通配路由：命中判存 handler。
+      final headRes = await app(_req(
+          'HEAD', '/sync/photo/photos/x',
+          headers: {'authorization': 'Bearer ${r.token}'}));
+      expect(headRes.statusCode, 200);
+    });
   });
 }

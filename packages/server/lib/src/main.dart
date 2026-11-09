@@ -26,8 +26,9 @@ Handler createApp(SyncStore store,
     final g = gateway ?? PhotoGateway(prefix: cos.prefix, cos: HttpCosStore(cos));
     router
       ..post('/sync/photo/upload', photoUploadHandler(store, g))
-      ..get('/sync/photo/<...>', photoDownloadHandler(store, g))
-      ..head('/sync/photo/<...>', photoExistsHandler(store, g));
+      // shelf_router 通配路由用正则参数 /<any|.*>（不是 <...>）。
+      ..get('/sync/photo/<any|.*>', photoDownloadHandler(store, g))
+      ..head('/sync/photo/<any|.*>', photoExistsHandler(store, g));
   }
   return router;
 }
