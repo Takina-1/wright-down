@@ -9,7 +9,11 @@ User=diary
 Group=diary
 WorkingDirectory=/opt/diary-sync
 EnvironmentFile=-/etc/diary-sync/server.env
-EnvironmentFile=-/etc/diary-sync/cos.env     # COS 凭证（COS_BUCKET/COS_SECRET_ID/COS_SECRET_KEY/COS_PREFIX）
+# COS credentials (COS_BUCKET/COS_SECRET_ID/COS_SECRET_KEY/COS_PREFIX).
+# NOTE: this comment must be a standalone line -- a trailing inline comment
+# on the EnvironmentFile line made systemd silently skip loading cos.env
+# (observed on this host; unit file comments stay ASCII-only).
+EnvironmentFile=-/etc/diary-sync/cos.env
 ExecStart=/opt/diary-sync/bin/server
 Restart=on-failure
 RestartSec=5
