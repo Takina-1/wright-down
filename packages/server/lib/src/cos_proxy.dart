@@ -153,7 +153,7 @@ class HttpCosStore implements CosObjectStore {
   Future<int> putObject(String key, Uint8List bytes,
       {required String contentType}) async {
     final request =
-        http.Request('PUT', Uri.parse('https://${_credentials.host}$key'));
+        http.Request('PUT', Uri.parse('https://${_credentials.host}/$key'));
     _applyHeaders(request,
         _sign('PUT', key, contentType, contentLength: bytes.length));
     request.bodyBytes = bytes;
@@ -165,7 +165,7 @@ class HttpCosStore implements CosObjectStore {
   @override
   Future<Uint8List?> getObject(String key) async {
     final request =
-        http.Request('GET', Uri.parse('https://${_credentials.host}$key'));
+        http.Request('GET', Uri.parse('https://${_credentials.host}/$key'));
     _applyHeaders(request,
         _sign('GET', key, 'application/octet-stream'));
     final response = await _client.send(request);
@@ -231,7 +231,9 @@ Handler photoUploadHandler(SyncStore store, PhotoGateway gateway) =>
   try {
     code = await gateway.cos.putObject(key, bytes,
         contentType: 'application/octet-stream');
-  } on Object catch (_) {
+  } on Object catch (e) {
+    // 异常必须留痕：静默吞掉会让线上问题无从排查（本冒烟即靠日志定位）。
+    print('[cos] putObject failed: $e');
     return _photoErr(502, 'cos unavailable');
   }
   if (code != 200) return _photoErr(code, 'cos upload failed');
@@ -252,7 +254,8 @@ Handler photoDownloadHandler(SyncStore store, PhotoGateway gateway) =>
   Uint8List? bytes;
   try {
     bytes = await gateway.cos.getObject(key);
-  } on Object catch (_) {
+  } on Object catch (e) {
+    print('[cos] getObject failed: $e');
     return _photoErr(502, 'cos unavailable');
   }
   if (bytes == null) return _photoErr(404, 'not found');
@@ -273,7 +276,8 @@ Handler photoExistsHandler(SyncStore store, PhotoGateway gateway) =>
   Uint8List? bytes;
   try {
     bytes = await gateway.cos.getObject(key);
-  } on Object catch (_) {
+  } on Object catch (e) {
+    print('[cos] getObject failed: $e');
     return _photoErr(502, 'cos unavailable');
   }
   if (bytes == null) return _photoErr(404, 'not found');
