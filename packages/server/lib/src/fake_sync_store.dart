@@ -21,18 +21,22 @@ class _Entry {
 }
 
 /// 内存实现。seq 全局单调，每次 push 递增；pull 返回 seq > cursor 的条目。
+///
+/// 条目按 (userId, id) 复合键存储，与 deploy/sql/schema.sql 里
+/// `entries` 的主键一致：不同用户的日记 id 允许重复，不能互相覆盖。
 class FakeSyncStore implements SyncStore {
   final Map<String, _User> _users = {};
   final Map<String, String> _tokens = {}; // token -> userId
-  final Map<String, _Entry> _entries = {};
+  final Map<(String, String), _Entry> _entries = {};
   int _seq = 0;
+  int _userSeq = 0; // 用户 id 单独计数，不占用条目 seq
 
   @override
   Future<AuthResult> register(String email, String password) async {
     if (_users.containsKey(email)) {
       throw StateError('email already registered');
     }
-    final userId = 'u${_seq++}';
+    final userId = 'u${_userSeq++}';
     _users[email] = _User(userId, email, hashPassword(password));
     final token = newToken();
     _tokens[token] = userId;
@@ -83,7 +87,8 @@ class FakeSyncStore implements SyncStore {
   @override
   Future<void> push(String userId, SyncPushBatch batch) async {
     for (final p in batch.patches) {
-      final existing = _entries[p.id];
+      final key = (userId, p.id);
+      final existing = _entries[key];
       final createdAt = existing?.createdAt ?? p.createdAt;
       final merged = <String, FieldValue>{
         ...(existing?.payload ?? const {}),
@@ -93,7 +98,7 @@ class FakeSyncStore implements SyncStore {
         merged[f.key] = mergeFieldLww(cur, f.value);
       }
       final seq = ++_seq;
-      _entries[p.id] = _Entry(p.id, userId, createdAt, merged, seq);
+      _entries[key] = _Entry(p.id, userId, createdAt, merged, seq);
     }
   }
 }
