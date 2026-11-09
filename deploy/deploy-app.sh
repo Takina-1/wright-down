@@ -57,6 +57,9 @@ dart test
 log "编译可执行文件"
 install -d -m 755 "${APP_DIR}"
 install -d -m 755 -o "${RUN_USER}" -g "${RUN_USER}" "${APP_DIR}/bin"
+# 运行中的旧进程持有二进制，直接覆盖会 ETXTBSY；先停服务再编译，
+# 末尾的 systemctl restart 会用新二进制重新拉起。
+systemctl stop diary-sync 2>/dev/null || true
 dart compile exe bin/server.dart -o "${APP_DIR}/bin/server"
 # 只交付二进制给运行用户，源码仓库保持 root（见上方说明）。
 chown -R "${RUN_USER}:${RUN_USER}" "${APP_DIR}/bin"
