@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-05（对象存储供应商由阿里云对象存储改为腾讯云 COS，数据路径定为 ECS 代理收发字节后）
+- 最后更新：2026-11-09（含第四轮在线修复：FakeSyncStore 条目隔离缺陷关闭、T-21 已改待部署）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -45,10 +45,16 @@
 | T-18 | `PORT` 接受可解析但非法的值（-1 / 0 / 65536），在 bind 时失败而非回落 8080 | `packages/server/lib/src/server_config.dart` | 补端口范围校验 |
 | T-19 | `verifyPassword` 用 `on Object` 宽捕获，吞掉 `ArgumentError` 等 | `packages/server/lib/src/password.dart` | 已被 T-02 的登录预检绕开；可评估收窄 |
 | T-20 | CA-pair guard 只查 `ca.key` 不查 `ca.crt` | `deploy/make-cert.sh` | 上次签发失败残留时需手动清理 |
-| T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 服务异常返回非 401 时脚本仍继续 |
+| T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 已改待部署：2026-11-09 脚本已断言 401 并输出诊断（第四轮），ECS 部署验证未执行 |
 | T-22 | `deploy-app.sh` 无执行位（用法为 `bash deploy-app.sh`，功能无碍） | `deploy/deploy-app.sh` | 报告措辞与实际不一致 |
 | T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:51` | 来自 F005（非 F013 引入），合并前应清理 |
 | T-25 | **ECS 公网带宽不足**：实测出向 ~428 KB/s（3.4 Mbps）、入向 ~10 Mbps。ECS 代理方案下下载一张 4 MB 照片约 10 秒，100 张批量同步约 16 分钟 | `docs/superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md` §3.3 | 已知限制，用户已知悉并选择维持 ECS 代理。缓解方向见同文档 §9（客户端上传前压缩最有效）；或在 T-24 一并评估升配/加带宽 |
+
+## E. 本轮已关闭
+
+| 编号 | 事项 | 状态 | 依据 | 关联 |
+|---|---|---|---|---|
+| T-26 | **FakeSyncStore 跨用户条目覆盖缺陷**：条目主键 (user_id, id) 与 schema.sql 一致，用户 id 分配不再占用条目 seq | 已关闭 | 服务端 31 项测试全过（新增 3 项回归，2026-11-09）；schema.sql 头部注释同步更新 | 缺陷修复；测试报告「第四轮」 |
 
 ## 合并门槛
 
@@ -57,6 +63,8 @@
 F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若按「全部必需验收项均须有证据」的口径，本轮**不满足合并到 `main` 的门槛**。
 
 **功能负责人裁决（2026-11-06）**：T-01 / T-02 真机验收**留到下一轮**，本轮先合入 `main`。本轮合入的是**对象存储供应商迁移与命名对齐**（腾讯云 COS + ECS 代理路径），宿主侧证据齐全（sync_core 13 + server 31 + client 442 = 486 项测试全过、三包静态分析与基线一致、调试 APK 构建成功），且**纯机械重命名、零行为变动**；真机验收的缺失不影响这部分成果的可信度。
+
+**第四轮裁决（2026-11-09）**：FakeSyncStore 复合键缺陷修复 + deploy-app.sh 健康检查加固**合入 `main`**。依据：服务端 31 项测试全过（含新增 3 项回归，无对外行为新增）、`bash -n` 语法通过、测试报告与台账已更新；ECS 部署实测与 DP-05/DP-06 真机验收仍记「未执行」，不以此掩盖。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 

@@ -210,3 +210,38 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 - 文档：产品设计、F012、F013 待办与台账、云同步设计、三份实现计划、测试报告、OPPO 上架清单、开源仓库资料中的对象存储表述统一为腾讯云 COS；ECS 侧事实表述保持不动。
 - 新增：`deploy/腾讯云COS配置-tencent-cos-setup.md`、`deploy/cam-policy.json`。
 - **未执行**：真机腾讯云 COS 读写（T-05 / T-24）。桶尚未创建，本次不含任何真实 COS 链路的验证证据。
+
+---
+
+## 第四轮：在线缺陷修复与部署脚本加固（2026-11-09）
+
+- 被测 commit：`887ed06`（FakeSyncStore 修复）、`4cebc3d`（deploy-app.sh 加固），分支 `feat/F013-cloud-sync`；经合并提交合入 `main`
+- 变动性质：缺陷修复 + 脚本加固，无对外行为新增
+
+### 缺陷与修复
+
+1. **FakeSyncStore 跨用户条目覆盖**：`FakeSyncStore._entries` 此前以条目 `id` 全局索引，与
+   `deploy/sql/schema.sql` 中 `entries` 的 `(user_id, id)` 主键口径不一致——两个用户推送相同
+   `id` 条目时后者覆盖前者，造成跨用户数据丢失。修：条目按 `(userId, id)` 复合键存储，用户 id
+   分配改用独立计数器（不再占用条目 seq），首个 push 的条目 seq 从 1 开始（与 DP-02 期望一致）。
+   新增 3 项回归测试：
+   - 跨用户同 id 不互相覆盖：A 的条目不会被 B 的同名条目顶掉
+   - 跨用户同 id 各自独立合并：A 的后续更新不会污染 B
+   - 用户 id 分配不占用条目 seq：首个 push 的 seq 从 1 开始
+
+   同步更新 `schema.sql` 头部注释，消除「内存实现缺陷」的过时描述。
+2. **deploy-app.sh 健康检查断言（对应待办 T-21）**：未带 token 访问 `/sync` 断言返回 401（鉴权生效）；
+   curl 失败或状态码不符时先输出 systemctl/journalctl 诊断再退出；git 仓库目录归 root 归属（解决
+   "dubious ownership"）；运行用户 diary 只持有二进制与状态目录 `/var/lib/diary-sync`；新增 `STATE_DIR`。
+
+### 验证结果（本机）
+
+| 检查 | 结果 |
+|---|---|
+| packages/server 全量 `dart test` | 31 项全过（含新增 3 项回归） |
+| `bash -n deploy/deploy-app.sh` | 语法检查通过 |
+
+### 未执行
+
+- ECS 上重新部署执行新脚本（文档化的健康检查断言/权限链路尚未在 ECS 实测，T-21 记「已改待部署」）。
+- DP-05 / DP-06 真机验收（真机仍未连接）、真机 COS（T-05 / T-24 未启动）。
