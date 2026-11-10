@@ -53,8 +53,19 @@ echo "==> 校验证书链"
 openssl verify -CAfile ca.crt server.crt
 openssl x509 -in server.crt -noout -subject -ext subjectAltName
 
+# CA 公钥证书分发给客户端两处：
+#   - client/assets/diary_ca.crt                     Dart 侧 TLS 信任锚点
+#             （dart:io 不读 network_security_config.xml）
+#   - client/android/app/src/main/res/raw/diary_ca.crt  Android 原生网络栈用
+# 两处内容必须字节一致 —— client/test/data/remote/tls_trust_test.dart 有断言。
+CLIENT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cp "${OUT}/ca.crt" "${CLIENT_ROOT}/client/assets/diary_ca.crt"
+cp "${OUT}/ca.crt" \
+   "${CLIENT_ROOT}/client/android/app/src/main/res/raw/diary_ca.crt"
+
 echo
 echo "产物在 ${OUT}"
-echo "  ca.crt     -> 复制到 client/android/app/src/main/res/raw/diary_ca.crt"
+echo "  ca.crt     -> 已复制到 client/assets/diary_ca.crt 与"
+echo "                client/android/app/src/main/res/raw/diary_ca.crt"
 echo "  server.key + server.crt -> 上传到服务器 /etc/nginx/ssl/diary-sync/"
 echo "  ca.key     -> 留在本机，不要上传"
