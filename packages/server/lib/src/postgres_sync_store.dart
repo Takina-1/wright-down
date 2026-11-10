@@ -37,7 +37,12 @@ class PostgresSyncStore implements SyncStore {
             username: config.user,
             password: config.password,
           ),
-          settings: ConnectionSettings(connectTimeout: config.timeout),
+          settings: ConnectionSettings(
+            connectTimeout: config.timeout,
+            // ECS 本地 PG 未启用 SSL——postgres 包 3.6 默认要求 SSL，
+            // 本地回环连接必须显式禁用（未来上云 RDS 时再按需开启）。
+            sslMode: SslMode.disable,
+          ),
         ),
       );
 
