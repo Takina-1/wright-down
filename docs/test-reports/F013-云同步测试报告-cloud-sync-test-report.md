@@ -185,9 +185,9 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 ## 本轮结论
 
 - 通过：DP-01、DP-02、DP-03、DP-04、DP-07、DP-08、DP-09、DP-10、DP-11（9 项）。
-- 未执行：DP-05、DP-06（真机未连接）；DP-09 的 DB 落库部分；真机 COS；跨设备真机同步。
-- 是否满足全部必需验收项：**否**。真机相关的 DP-05 / DP-06 未执行，不计入通过；其余部署链路验收项全部通过。
-- 下一步：连接真机补做 DP-05 / DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证与真机 COS；实现 token 刷新（AC-08）。
+- 未执行：DP-05、DP-06（真机 UI 交互；服务端等价链路已在第六轮以 API 等效验收覆盖，真机点击待补）；DP-09 的 DB 落库部分；真机 COS UI 链路；跨设备真机同步。
+- 是否满足全部必需验收项：**否**。真机相关的 DP-05 / DP-06 UI 交互未执行。
+- 下一步：真机可点按装机弹窗时补做 DP-05/DP-06；接入 PostgresSyncStore 后补做 DP-09 落库验证；实现 token 刷新（AC-08）。
 - 未完成项的逐条登记见 [F013 待办登记表](../features/F013-待办-todos.md)。
 
 ## 第三轮：对象存储供应商迁移与命名对齐（2026-11-05）
@@ -286,3 +286,100 @@ dev 机走**公网路径**复验同样通过：登录 + `GET /sync?cursor=0` 返
 - 真机双设备照片同步验收（T-24 真机子项）：需连真机 + `--dart-define=USE_COS_HTTP=true` 构建 release APK；T-01/T-02 真机验收同轮补做。
 - 客户端上传前压缩（T-25 缓解）并入真机轮评估。
 - 冒烟残留对象（`photos/probe.txt`、`photos/b84a387b…`）：CAM 策略刻意不授 DeleteObject，清理走控制台单独流程。
+
+## 第六轮：真机验收尝试与服务端 API 等效验收（2026-11-10）
+
+### 尝试与受阻（真机装机）
+
+- 真机在线（Xiaomi 2211133C，Android 15，MIUI，adb 授权正常）；T-01 前置条件全部满足：
+  - ECS 在线，`GET /sync` 无 token 返回 **401**（鉴权生效，T-21 断言链路与线上一致）
+  - CA 信任链三级校验一致：服务器 `/etc/nginx/ssl/diary-sync/ca.crt` sha256 指纹
+    （`7C:ED:3A:85:…`）= 本机 `deploy/certs/ca.crt` = APK 内嵌 `res/raw/diary_ca.crt`
+- 客户端 `network_security_config.xml` 信任 `@raw/diary_ca`（系统 CA + 自签并列），
+  **无需 root** 导入系统证书。
+- debug APK 构建成功（`flutter build apk --debug`，已注入
+  `--dart-define=SYNC_BASE_URL=https://8.148.158.13 --dart-define=USE_COS_HTTP=true`）。
+- **安装受阻（环境限制，非代码缺陷）**：MIUI 定制安装器强制弹人工确认框，
+  `adb install`（含 `-r -g -t`）、`pm install`（`-r -g`，路径 `/data/local/tmp` 已避开
+  SELinux FUSE 拦截）均返回 `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`；
+  adbd 非 root 无法代点；本机无 `sdkmanager` 可用模拟器镜像（安装中 Flutter 占用解包目录
+  致 sdkmanager 崩溃，且无 KVM 验证路径）。
+
+### 服务端 API 等效验收（脚本：`scripts/f013-api-acceptance.sh`）
+
+真机弹窗不可绕过后，对 T-01/T-02/T-04/T-24 所覆盖的**服务端链路**用真实 HTTP
+（经 nginx 443）做了等效验收：
+
+| 检查 | 结果 |
+|---|---|
+| TLS 链（本地 CA 指纹三级一致 + 401 即证明握手与鉴权链建立） | 通过 |
+| 注册（curl ↔ `/auth/register`） | 200，返回 userId/token |
+| 登录负路径（错误密码） | 401，符合预期 |
+| **推送**（`POST /sync/batch`，字段 `content`，t=毫秒戳，等效 DP-06 真机新建日记） | **200** |
+| **拉取回流**（`GET /sync?cursor=0`，等效第二台设备拉取） | 拉到刚推送的 `e-acc-1`，cursor=1 |
+| 鉴权断言（坏 token） | 401 |
+| COS 上传（X-Photo-Hash 裸 sha256 → `photos/<sha256>`） | 200 + 正确 key |
+| COS 下载字节比对 | 一致 |
+| COS HEAD 判存 | 存在 200 / 不存在 404 |
+
+> 等效性边界：本验收证明**服务端侧**（TLS/鉴权/协议/推送拉取/COS 代理）全链路可用，
+> 但不替代真机 UI 交互验收（登录页点击、写日记保存、双设备同步）——
+> 真机弹窗确认仍留待用户到场时补做，待办表如实保留「真机 UI 未执行」状态。
+
+### 退出时已知事实
+
+- FakeSyncStore 内存态：`u1`/`u2` 等历史注册数据与本次验收数据在不同运行实例间不持久
+  （服务多次重启，日志可见），再次印证 T-06 PostgresSyncStore 的优先级。
+
+### 未执行
+
+- 真机 UI 交互验收（登录、写日记、双设备照片同步）：待真机可点按安装弹窗时补做。
+- 客户端上传前压缩（T-25 缓解）。
+- T-03 落库验证：**第七轮已补**（见下）——FakeSyncStore 无真实 DB 的阻塞随 T-06 关闭而解除。
+
+## 第七轮：PostgresSyncStore 落库（2026-11-10）
+
+### 目标与背景
+
+FakeSyncStore 是内存实现，ECS 上服务每次重启，全部注册账号与已同步日记即清空
+（日志实证：`dp@local.test`、第六轮验收用户 `u1/u2/u3` 重启后登录 401）。
+本轮回填设计文档 AC-07（推送与游标推进同事务、不丢不重）。
+
+### 实现（分支 `feat/F013-server-postgres`，commit `0189ea2` / `73ba49a`）
+
+- `packages/server/lib/src/postgres_sync_store.dart`：`PostgresSyncStore implements
+  SyncStore`，语义与 FakeSyncStore 逐条等价：
+  - register：邮箱冲突 → StateError（handler 409）；id 生成 `u<ms><4hex>`；bcrypt `$2b$10`。
+  - login：邮箱不存在也跑一次 bcrypt（防时序）；超长口令抛 ArgumentError（400）；
+    校验失败返回 null（401）。
+  - pull：`seq > cursor` 升序；空批 cursor 不变；非空推进到本批 max seq。
+  - push：**单事务**；逐 patch 经 `sync_seq` 行锁 `UPDATE ... RETURNING` 取号
+    （锁持有至提交——AC-07 串行化）；字段级 LWW（`FieldValue.t` 毫秒戳）；
+    `ON CONFLICT (user_id, id) DO UPDATE` 覆盖 payload/seq，created_at 首次写入后冻结；
+    payload 存 JSONB（`payload::text` 读回后 Dart `jsonDecode`，与 sync_core 编码一致）。
+- `packages/server/lib/src/pg_config.dart`：`PG_*` 环境变量 → 连接配置。
+- `packages/server/lib/src/main.dart`：PG 凭证齐全 → `PostgresSyncStore.connect`，
+  缺任一 → FakeSyncStore 回退 + `[warn]`。
+- `packages/server/test/postgres_sync_store_test.dart`：5 项集成测试
+  （无 PG env 时 `skip` 不 fail）。
+- `deploy/diary-sync.service`：加 `EnvironmentFile=-/etc/diary-sync/pg.env`。
+- **SSL**：postgres 包 3.6 默认要求 SSL；ECS 本地 PG 未启用，连接显式
+  `SslMode.disable`（commit `73ba49a`）。
+
+### 验证（ECS 真实 PostgreSQL 15.19）
+
+| 检查 | 结果 |
+|---|---|
+| `dart analyze`（本机） | No issues found |
+| `dart test`（本机，无 PG env） | 48 过 + 5 skip（PG 集成按设计跳过） |
+| ECS `deploy-app.sh` 全链路（`feat/F013-server-postgres`） | 拉代码 → pub get → analyze → 48 过 → 编译 → 装单元 → 401 健康检查 全过 |
+| ECS 真实 PG 集成测试（`source pg.env && dart test`） | **5/5 全过**：注册/登录/token/鉴权、push/pull/游标、字段级 LWW+created_at 冻结、跨用户同 id 隔离+payload 往返、并发 push 不丢条目 |
+| DP-09 落库验证 | `select left(password_hash,4)` → `$2b$`；重复邮箱注册 409；entries 10 行 seq 全部唯一 |
+| **重启持久化**（`scripts/pg-persistence-verify.sh`） | register → push → pull → `systemctl restart` → login 成功 → pull 条目仍在（FakeSyncStore 时代必挂） |
+
+### 未执行 / 遗留
+
+- 连接管理为单连接演示环境（并发正确性已验证；吞吐上限评估后再升级 ConnectionPool）。
+- T-07 token 过期刷新、T-08 客户端 token 持久化、T-09~T-12 触发/照片缺陷、T-13~T-23
+  运维事项见待办表。
+- 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
