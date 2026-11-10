@@ -27,7 +27,9 @@ OUT="${SCRIPT_DIR}/certs"
 mkdir -p "${OUT}"
 cd "${OUT}"
 
-if [[ ! -f ca.key ]]; then
+# T-20：CA-pair guard 同时检查 ca.key 与 ca.crt——上次签发失败
+# 可能只留下 ca.key（无 ca.crt）——此时重新生成整套 CA（覆盖残留）。
+if [[ ! -f ca.key || ! -f ca.crt ]]; then
     echo "==> 生成 CA（私钥仅存本机）"
     openssl req -x509 -newkey rsa:4096 -nodes -days "${DAYS}" \
         -keyout ca.key -out ca.crt -subj "/CN=Local Diary App CA"

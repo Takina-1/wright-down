@@ -20,10 +20,14 @@ String hashPassword(String password) => BCrypt.hashpw(
     BCrypt.gensalt(prefix: kBcryptPrefix, logRounds: kBcryptLogRounds));
 
 /// 校验口令与哈希。哈希格式非法时返回 false，不抛异常。
+///
+/// T-19：收窄捕获——只吞 [ArgumentError]（bcrypt 对超长口令抛的）。
+/// 调用方（login handler）已做长度预检，其他异常不会触发——
+/// 收窄避免宽捕获吞掉本应暴露的编程错误。
 bool verifyPassword(String password, String hash) {
   try {
     return BCrypt.checkpw(password, hash);
-  } on Object {
+  } on ArgumentError {
     return false;
   }
 }
