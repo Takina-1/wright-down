@@ -50,7 +50,7 @@ class _FakeSyncEngine extends SyncEngine {
       );
 
   @override
-  void triggerPush() {
+  void triggerPush({Duration debounce = const Duration(seconds: 30)}) {
     pushes++;
   }
 }

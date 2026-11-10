@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:local_diary/src/domain/entry.dart';
 import 'package:local_diary/src/domain/local_entry_repository.dart';
 import 'package:local_diary/src/domain/sync/entry_sync_map.dart';
@@ -35,7 +37,7 @@ class SyncEngine {
     required this.auth,
     required this.cos,
     required this.now,
-  });
+  }) : _stateController = StreamController<SyncState>.broadcast();
 
   final LocalEntryRepository repository;
   final SyncRemote remote;
@@ -49,8 +51,9 @@ class SyncEngine {
 
   int _cursor = 0;
 
-  final StreamController<SyncState> _stateController =
-      StreamController<SyncState>.broadcast();
+  /// 状态广播流。stop() 关闭后由 start() 重建（非 final：stop→start 循环
+  /// 需要重新创建控制器，避免复用死流）。
+  StreamController<SyncState> _stateController;
   SyncState _stateValue = SyncState.idle;
   Timer? _pullTimer;
   Timer? _pushDebounce;
@@ -77,11 +80,14 @@ class SyncEngine {
     final me = await _me();
     if (me == null) return;
     var entries = await repository.exportAll();
-    // 照片上传：photo 有 BLOB 但无 photoKey 的条目，上传 COS 并设 key。
+    // 照片上传：photo 有 BLOB 但 photoKey 缺失或与内容不匹配（同条目换过照片）
+    // 的条目，上传 COS 并设 key。photoKey 恒为照片内容 sha256——hash 不匹配
+    // 即照片已变（T-12 修复）。
     // 用 saveMerged 保留既有 sync_stamps（含 photo 戳），避免 save 重算时间戳。
     for (var i = 0; i < entries.length; i++) {
       final e = entries[i];
-      if (e.photo != null && e.photoKey == null) {
+      if (e.photo != null &&
+          (e.photoKey == null || _photoHash(e.photo!) != e.photoKey!)) {
         final key = await cos.upload(e.photo!);
         final stamps = {...e.syncStamps, 'photo': now().millisecondsSinceEpoch};
         final updated = Entry(
@@ -130,9 +136,12 @@ class SyncEngine {
           ? _fromSyncEntry(remoteEntry)
           : applyRemote(existing, remoteEntry);
       await repository.saveMerged(merged);
-      // 照片下载：photoKey 有但本地 photo BLOB 缺失，从 COS 下载缓存。
+      // 照片下载：photoKey 有但本地 photo BLOB 缺失，或本地 BLOB 与远端 key
+      // 不匹配（远端照片已变更，本地缓存失效）——下载覆盖（T-12 修复）。
       // 用 saveMerged 保留 photoKey 与 photo 戳（photo 是本地缓存不进 sync 字段）。
-      if (merged.photoKey != null && merged.photo == null) {
+      if (merged.photoKey != null &&
+          (merged.photo == null ||
+              _photoHash(merged.photo!) != merged.photoKey!)) {
         final bytes = await cos.download(merged.photoKey!);
         final withPhoto = Entry(
           id: merged.id,
@@ -155,6 +164,11 @@ class SyncEngine {
   /// 启动同步：若已在运行则忽略；否则开启 5 分钟周期拉取并立即触发一次 pull。
   void start() {
     if (_pullTimer != null) return;
+    // stop() 会关闭状态流——start 重建（复用死流会导致后续状态广播被静默丢弃）。
+    if (_stateController.isClosed) {
+      _stateController = StreamController<SyncState>.broadcast();
+      _stateValue = SyncState.idle;
+    }
     _pullTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => unawaited(triggerPull()),
@@ -184,14 +198,26 @@ class SyncEngine {
     }
   }
 
-  /// 触发推送：取消既有防抖后，安排 30 秒后推送（合并多次写入为一次往返）。
-  void triggerPush() {
+  /// 触发推送：登录态预检通过后，取消既有防抖并安排 [debounce] 后推送
+  /// （合并多次写入为一次往返）。未登录时直接跳过——登出后不浪费一次推送循环。
+  void triggerPush({Duration debounce = const Duration(seconds: 30)}) {
+    unawaited(_me().then((me) {
+      if (me == null) return; // T-11：未登录不安排推送。
+      _schedulePush(debounce: debounce);
+    }));
+  }
+
+  /// 安排推送防抖（登录态已确认）。
+  void _schedulePush({Duration debounce = const Duration(seconds: 30)}) {
     _pushDebounce?.cancel();
-    _pushDebounce = Timer(const Duration(seconds: 30), () async {
+    _pushDebounce = Timer(debounce, () async {
       try {
         await _pushWithRetry();
+        _setState(SyncState.synced);
       } catch (_) {
-        // 推送失败不阻塞 UI：下次写触发或下次 pull 时重试。
+        // T-09：推送失败不静默——置 failed，UI 监听 failed 提示
+        // （与 triggerPull 的状态语义对称）。
+        _setState(SyncState.failed);
       }
     });
   }
@@ -254,6 +280,10 @@ class SyncEngine {
       syncStamps: fields.map((k, v) => MapEntry(k, v.t)),
     );
   }
+
+  /// 照片内容 sha256 hex——与 FakeCos/HttpCosGateway 的 photoKey 口径一致。
+  static String _photoHash(Uint8List bytes) =>
+      sha256.convert(bytes).toString();
 
   /// dayKey 必须是零填充的 ISO 日期，形如 2026-11-03。
   String _dayKey(DateTime dt) =>
