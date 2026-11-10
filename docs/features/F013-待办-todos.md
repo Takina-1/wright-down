@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-10（第九轮：T-07 refresh token 过期刷新 + T-08 token 持久化落地，AC-08 完整实现）
+- 最后更新：2026-11-10（第十轮：D 节质量改进 T-18/19/20/22/23 关闭、T-21 验证关闭）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -38,12 +38,12 @@
 
 | 编号 | 事项 | 位置 | 说明 |
 |---|---|---|---|
-| T-18 | `PORT` 接受可解析但非法的值（-1 / 0 / 65536），在 bind 时失败而非回落 8080 | `packages/server/lib/src/server_config.dart` | 补端口范围校验 |
-| T-19 | `verifyPassword` 用 `on Object` 宽捕获，吞掉 `ArgumentError` 等 | `packages/server/lib/src/password.dart` | 已被 T-02 的登录预检绕开；可评估收窄 |
-| T-20 | CA-pair guard 只查 `ca.key` 不查 `ca.crt` | `deploy/make-cert.sh` | 上次签发失败残留时需手动清理 |
-| T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 已改待部署：2026-11-09 脚本已断言 401 并输出诊断（第四轮），ECS 部署验证未执行 |
-| T-22 | `deploy-app.sh` 无执行位（用法为 `bash deploy-app.sh`，功能无碍） | `deploy/deploy-app.sh` | 报告措辞与实际不一致 |
-| T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:51` | 来自 F005（非 F013 引入），合并前应清理 |
+| T-18 | `PORT` 接受可解析但非法的值（-1 / 0 / 65536），在 bind 时失败而非回落 8080 | `packages/server/lib/src/server_config.dart` | 已关闭：第十轮补端口范围校验（1–65535），非法值回落 8080 |
+| T-19 | `verifyPassword` 用 `on Object` 宽捕获，吞掉 `ArgumentError` 等 | `packages/server/lib/src/password.dart` | 已关闭：第十轮收窄为 `on ArgumentError`（调用方预检已拦超长） |
+| T-20 | CA-pair guard 只查 `ca.key` 不查 `ca.crt` | `deploy/make-cert.sh` | 已关闭：第十轮同时检查 ca.key 与 ca.crt |
+| T-21 | 健康检查只打印 HTTP 码，不断言 401 | `deploy/deploy-app.sh` | 已关闭：第四轮已断言 401，T-06/T-07 ECS 部署健康检查均验证通过 |
+| T-22 | `deploy-app.sh` 无执行位（用法为 `bash deploy-app.sh`，功能无碍） | `deploy/deploy-app.sh` | 已关闭：第十轮加执行位（./deploy-app.sh 可直接执行） |
+| T-23 | pre-existing analyze warning：`unused_field _undoableEntryId` | `client/lib/src/ui/home_page.dart:51` | 已关闭：第十轮清理（F005 遗留未使用字段） |
 | T-25 | **ECS 公网带宽不足**：实测出向 ~428 KB/s（3.4 Mbps）、入向 ~10 Mbps。ECS 代理方案下下载一张 4 MB 照片约 10 秒，100 张批量同步约 16 分钟 | `docs/superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md` §3.3 | 已知限制，用户已知悉并选择维持 ECS 代理。缓解方向见同文档 §9（客户端上传前压缩最有效）；或在 T-24 一并评估升配/加带宽 |
 
 ## E. 本轮已关闭
@@ -76,6 +76,8 @@ F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若�
 **第八轮裁决（2026-11-10）**：触发循环缺陷 T-09/T-10/T-11 与照片缺口 T-12**合入 `main`**。依据：flutter analyze 干净（仅 pre-existing 警告）、flutter test 全量 452 项通过（新增 5 项缺陷测试）；纯客户端逻辑无服务端改动，无需 ECS 部署。真机 UI 交互验收仍留待装机弹窗可点时补做。
 
 **第九轮裁决（2026-11-10）**：T-07 refresh token 过期刷新 + T-08 token 持久化**合入 `main`**。依据：ECS 真实 PG 集成测试 8/8 全过（含 refresh/轮换/过期 3 项新增）、curl 冒烟全链路通过（register→pull→refresh→轮换→过期→重试）、本机 server 48 过 8 skip / client 458 全过、analyze 干净。AC-08 完整落地。
+
+**第十轮裁决（2026-11-10）**：D 节质量改进 T-18/T-19/T-20/T-22/T-23**合入 `main`**，T-21 验证关闭。依据：server 48 过 8 skip、client 458 全过、analyze 干净、make-cert 语法检查通过；纯代码/脚本小改，无服务端行为变更，无需 ECS 部署。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 
