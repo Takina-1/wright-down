@@ -2,25 +2,25 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-10（第五轮：COS 代理实现与 ECS 冒烟通过；T-05 完成、T-24 代码侧完成）
+- 最后更新：2026-11-10（第七轮：PostgresSyncStore 落库落地，T-06 关闭、T-03 已验证；见 T-29）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
 
 | 编号 | 事项 | 状态 | 阻塞原因 | 下一步 | 关联 |
 |---|---|---|---|---|---|
-| T-01 | **DP-05 真机可连**：release APK 装到小米 2211133C 后能连 `https://8.148.158.13` 完成登录（内置 CA 生效，不报证书错误） | 未执行 | 真机 USB 未连接（用户 2026-11-05 暂时拔除），本轮改用请求做等价验证 | 连上手机 → 装 APK → 启动查 SSL/证书日志 → App 内登录 | 部署计划 Task 8 Step 2–3 |
-| T-02 | **DP-06 真机推送**：真机写一篇日记并触发推送，服务端能查到该条目 | 未执行 | 同 T-01 | App 内新建并保存日记 → 服务端用 curl 查该条目 | 部署计划 Task 8 Step 4 |
-| T-03 | **DP-09 落库验证**：bcrypt 哈希以 `$2b$` 形式落进 `users.password_hash`，DB 级邮箱唯一性约束生效 | 未执行 | 服务端仍是 FakeSyncStore（内存），无真实 DB | 接入 PostgresSyncStore 后查 `select email, password_hash from users` | 部署计划 DP-09 |
-| T-04 | 真机端到端跨设备同步（含照片） | 未执行 | 无真机 + 无真实 COS | T-01 / T-02 完成后补做 | 设计 AC-03 / AC-06 |
+| T-01 | **DP-05 真机可连**：release APK 装到小米 2211133C 后能连 `https://8.148.158.13` 完成登录（内置 CA 生效，不报证书错误） | 服务端等效已过/真机 UI 待补 | 真机已连接但 MIUI 安装弹窗无法无头点击（`adb install`/`pm install` 均 `INSTALL_FAILED_USER_RESTRICTED`）；CA 指纹三级一致（服务器/本机/APK 内嵌）已验证 | 真机可点按弹窗时：装 APK → 启动 → 查 SSL/证书日志 → App 内登录（T-01）；服务端链路见测试报告「第六轮」 | 部署计划 Task 8 Step 2–3 |
+| T-02 | **DP-06 真机推送**：真机写一篇日记并触发推送，服务端能查到该条目 | 服务端等效已过/真机 UI 待补 | 同 T-01 | 服务端 API 等效推送+拉取已在第六轮通过（脚本 `scripts/f013-api-acceptance.sh`）；真机补做：App 内新建保存日记 → 服务端查该条目 | 部署计划 Task 8 Step 4 |
+| T-03 | **DP-09 落库验证**：bcrypt 哈希以 `$2b$` 形式落进 `users.password_hash`，DB 级邮箱唯一性约束生效 | 已验证 | 第七轮：`select left(password_hash,4)` → `$2b$`；重复邮箱注册 409（集成测试）；entries seq 无重复（10 行 10 唯一） | 已随 T-06 验证 | 部署计划 DP-09 |
+| T-04 | 真机端到端跨设备同步（含照片） | 服务端等效已过/真机 UI 待补 | 真机装机弹窗无法无头点击 | T-01 / T-02 真机点击补做后继续 | 设计 AC-03 / AC-06；第六轮服务端等效已覆盖推送/拉取/COS 链路 |
 | T-05 | **建桶 + CAM 凭证**：腾讯云 COS ap-guangzhou 私有桶、CAM 子用户 + bucket 级最小权限策略（只授 PutObject/GetObject，不授 DeleteObject）、密钥只存 ECS 服务端环境变量 | 已完成 | 2026-11-10 冒烟通过：桶/凭证/策略生效，密钥落 /etc/diary-sync/cos.env（0600） | 控制台建桶 → 写 `deploy/cam-policy.json` → 建子用户绑定策略 → 密钥写入 ECS 环境变量 | [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) §3.4 |
-| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 代码侧完成 | 服务端代理端点 + 客户端 `HttpCosGateway` 实现完毕，ECS 冒烟（注册→上传→下载比对→HEAD 判存）通过；**真机双设备验收下一轮** | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 请求体上限（已调至 16m）** | COS 设计 §3.2 / §3.3 |
+| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 代码侧+服务端等效完成 | 服务端代理端点 + 客户端 `HttpCosGateway` 实现完毕，ECS 冒烟 + 第六轮服务端 API 等效（上传/下载比对/HEAD 判存）全过；**真机装机受阻于 MIUI 弹窗，双设备验收下一步** | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 请求体上限（已调至 16m）** | COS 设计 §3.2 / §3.3 |
 
 ## B. 功能延后（未实现）
 
 | 编号 | 事项 | 状态 | 影响 | 关联 |
 |---|---|---|---|---|
-| T-06 | **PostgresSyncStore**（真实 SQL + 事务游标，满足 AC-07 游标原子性） | 未实现 | 当前内存实现**服务重启即丢全部账号与同步数据**（本轮已实际发生一次：重启后 `dp@local.test` 不存在，登录 401）。生产不可用 | 设计 AC-07 |
+| T-06 | **PostgresSyncStore**（真实 SQL + 事务游标，满足 AC-07 游标原子性） | 已关闭 | 第七轮（2026-11-10）：`PostgresSyncStore` 落地——行锁取 seq、字段级 LWW、created_at 冻结；ECS 真实 PG 集成测试 5 项全过、并发 push 无丢无重、重启持久化验证通过（register→push→pull→restart→login→pull 全活）；FakeSyncStore 时代「重启即丢」缺陷关闭 | 设计 AC-07；测试报告「第七轮」 |
 | T-07 | **Token 过期与刷新**（AC-08）：token 失效 → 换 token 重试一次 → 仍失败则停同步提示重登录，不自动登出 | 未实现 | 当前 token 无过期 | 设计 AC-08 |
 | T-08 | 客户端 `InMemoryTokenStore` → SharedPreferences 持久化 | 未实现 | App 重启需重新登录 | Part 3b |
 | T-09 | 触发循环缺陷 I-2：`triggerPush` 吞掉推送失败，状态仍显示 synced（违反「不静默失败」） | 未修 | 推送失败对用户不可见 | Part 3b 终审 |
@@ -56,6 +56,8 @@
 |---|---|---|---|---|
 | T-26 | **FakeSyncStore 跨用户条目覆盖缺陷**：条目主键 (user_id, id) 与 schema.sql 一致，用户 id 分配不再占用条目 seq | 已关闭 | 服务端 31 项测试全过（新增 3 项回归，2026-11-09）；schema.sql 头部注释同步更新 | 缺陷修复；测试报告「第四轮」 |
 | T-27 | **第五轮 COS 代理缺陷修复**：URL 主机/路径分隔符缺失、systemd 行内中文注释跳过 EnvironmentFile、getObject 非 200 返回错误体、签名 uriPath 缺前导斜杠、shelf_router 通配符语法 | 已关闭 | 各 commit `144ef0e`/`7d22850`/`c2bd43a`/`093efdf`/`9fa68f5`；回归测试已补；ECS 真实 COS 冒烟通过 | 缺陷修复；测试报告「第五轮」 |
+| T-28 | **真机装机验收尝试（2026-11-10）**：CA 指纹三级一致（服务器=本机=APK 内嵌）、debug APK 构建成功；装机受阻于 MIUI 安装弹窗（`INSTALL_FAILED_USER_RESTRICTED`，shell/非 root 均无法绕过）；随后完成服务端 API 等效验收（注册/登录负路径/推送/拉取/坏 token 401/COS 上传下载判存全过） | 已验证（等效） | 脚本 `scripts/f013-api-acceptance.sh`；测试报告「第六轮」 | 真机 UI 交互验收（T-01/T-02）仍留待用户可点按弹窗时补做 |
+| T-29 | **T-06 PostgresSyncStore 落库**：服务端数据从 FakeSyncStore 内存态迁移至真实 PostgreSQL——行锁取 seq（AC-07）、字段级 LWW、created_at 冻结、payload JSONB 往返；装配 PG 凭证探测 + Fake 回退；systemd 挂 pg.env | 已关闭 | ECS 真实 PG 集成测试 5 项全过（含并发 push 无丢无重）；重启持久化验证通过（register→push→pull→restart→login→pull）；bcrypt `$2b$` 落库、entries seq 无重复；本机 48 过 5 skip | 测试报告「第七轮」；commit `0189ea2`/`73ba49a`（SSL 修复） |
 
 ## 合并门槛
 
@@ -68,6 +70,8 @@ F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若�
 **第四轮裁决（2026-11-09）**：FakeSyncStore 复合键缺陷修复 + deploy-app.sh 健康检查加固**合入 `main`**。依据：服务端 31 项测试全过（含新增 3 项回归，无对外行为新增）、`bash -n` 语法通过、测试报告与台账已更新；ECS 部署实测与 DP-05/DP-06 真机验收仍记「未执行」，不以此掩盖。
 
 **第五轮裁决（2026-11-10）**：COS 代理代码侧完成并经 ECS 真实 COS 冒烟（注册→上传→下载字节比对→HEAD 判存 200/404 全过）**合入 `main`**。依据：server 48 项 / client 447 项测试全过、三包静态分析干净、部署脚本全链路绿、签名被真实 COS 接受。**真机双设备验收（T-24 真机子项）与 T-01/T-02 真机验收留到下一轮**（当前无真机连接）；客户端上传前压缩（T-25 缓解）同样并入真机轮评估。
+
+**第七轮裁决（2026-11-10）**：PostgresSyncStore 落库**合入 `main`**。依据：ECS 真实 PG 集成测试 5 项全过（语义与 FakeSyncStore 等价 + 并发 seq 串行化）、bcrypt 落库 `$2b$`、重启持久化验证通过（FakeSyncStore 时代重启即丢的缺陷关闭）；`dart analyze` 干净、本机 48 过 5 skip（PG 集成测试无 PG env 时按设计跳过）。T-01/T-02 真机 UI 交互仍留待装机弹窗可点时补做。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 

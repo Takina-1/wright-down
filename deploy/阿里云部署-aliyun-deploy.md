@@ -99,15 +99,21 @@ bash provision-alinux4.sh
 1. **`entries` 主键为 `(user_id, id)`**，而非单列 `id`。`FakeSyncStore` 的 `_entries` 以 `p.id` 全局索引，跨用户同 id 会互相覆盖——这是内存实现的缺陷，真实库不能照抄。
 2. **`seq` 由 `sync_seq` 行锁自增，而非 `BIGSERIAL`**。序列 `nextval` 在事务提交前即分配值，客户端可能先拉到 `seq=6` 却漏掉仍未提交的 `seq=5`，cursor 直接跳过该条目。改用 `UPDATE sync_seq SET value = value + 1 ... RETURNING value`，行锁持有至提交，推送事务间串行化，`seq` 顺序等于提交顺序。
 
-## 5. 尚未完成的服务端代码
+## 5. 服务端代码现状（2026-11-10 第七轮更新）
 
-`packages/server/` 目前只有 `FakeSyncStore`（内存实现）。`main()` 硬编码 `FakeSyncStore()`，端口 8080。生产化还需：
+`packages/server/` 的存储已从 FakeSyncStore（内存）迁移到 PostgreSQL：
 
-- `PostgresSyncStore` 实现 `SyncStore` 接口（真实 SQL）
-- `packages/server/pubspec.yaml` 增加 `postgres` 依赖
-- `main()` 改为从环境变量读库配置并装配 `PostgresSyncStore`
-- systemd 单元 `deploy/diary-sync.service`（已备）
-- nginx 反代 + HTTPS
+- `PostgresSyncStore` 实现 `SyncStore` 接口（真实 SQL，见
+  `packages/server/lib/src/postgres_sync_store.dart`）：行锁取 seq（AC-07）、
+  字段级 LWW、payload JSONB、created_at 冻结。
+- `main()` 从环境变量 `PG_HOST/PG_PORT/PG_DB/PG_USER/PG_PASSWORD` 装配
+  `PostgresSyncStore`（`pg_config.dart`）；凭证缺失回退 FakeSyncStore（开发模式）。
+- `packages/server/pubspec.yaml` 已增加 `postgres` 依赖。
+- systemd 单元 `deploy/diary-sync.service` 已挂 `/etc/diary-sync/pg.env`
+  （凭证由 provision 脚本生成，0600，owner diary）。
+- 连接显式 `SslMode.disable`：postgres 包默认要求 SSL，本机 PG 未启用 SSL。
+- 已知限制：单连接演示环境（并发正确性已验证；吞吐上限再评估连接池）。
+- nginx 反代 + HTTPS 已在 §3/§4 完成（TLS 443 + 自签 CA）。
 
 ## 6. 已知环境约束
 
