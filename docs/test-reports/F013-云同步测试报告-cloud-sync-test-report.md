@@ -427,5 +427,44 @@ FakeSyncStore 是内存实现，ECS 上服务每次重启，全部注册账号�
 
 ### 遗留
 
-- T-07 token 过期刷新、T-08 客户端 token 持久化（另开轮）。
+- T-07 token 过期刷新、T-08 客户端 token 持久化：**第九轮已补**（见下）。
+- 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
+
+## 第九轮：Token 过期刷新与持久化（T-07/T-08，2026-11-10）
+
+### 目标
+
+AC-08 完整落地：服务端 refresh token 机制；客户端 401 → refresh → 重试一次 → 停同步提示；token 经 SharedPreferences 持久化（App 重启免登录）。
+
+### 实现（分支 `feat/F013-token-refresh-persistence`，commit `1f6d09e`）
+
+**服务端**：
+- `deploy/sql/schema.sql`：`tokens` 表加 `expires_at`（NULL 兼容存量）；新增 `refresh_tokens` 表（30 天过期）。
+- `PostgresSyncStore`/`FakeSyncStore`：register/login 签发 access(7d)+refresh(30d)；`userIdForToken` 校验 expires_at（过期→401）；新增 `refresh()`——校验→轮换（DELETE 旧+INSERT 新）→新 access+refresh。
+- `handlers`：新增 `POST /auth/refresh` 端点；register/login 响应带 refreshToken。
+- `sync_core` `AuthResult`：加可选 `refreshToken`（向后兼容）。
+
+**客户端**：
+- `AuthSession` 模型（access+refresh+expiresAt）+ `SharedPreferencesTokenStore`（T-08）+ `InMemoryTokenStore` 改存 AuthSession。
+- `EmailPasswordProvider.refresh()`：调 `/auth/refresh` → 存新 AuthSession。
+- `RemoteRepo`：pull/push 收到 401 → `tokenRefresher` 换新 access → 重试一次 → 仍 401 → 抛 StateError；新增 `refresh()` 方法。
+- `main.dart`：装配 SharedPreferencesTokenStore + tokenRefresher。
+
+### 验证（ECS 真实 PostgreSQL）
+
+| 检查 | 结果 |
+|---|---|
+| `dart analyze`（server/sync_core） | 干净 |
+| `dart test`（本机，无 PG env） | 48 过 + 8 skip |
+| `flutter analyze client` | 干净（仅 pre-existing） |
+| `flutter test client` 全量 | **458 项全过**（452 原有 + 6 新增） |
+| ECS schema 变更（ALTER+CREATE） | 幂等执行成功 |
+| ECS `deploy-app.sh` 全链路 | 拉代码→pub get→analyze→48 过→编译→装单元→401 健康检查 全过 |
+| ECS 真实 PG 集成测试 | **8/8 全过**（含 refresh/轮换/过期 3 项新增） |
+| **curl 冒烟**（`scripts/t07-refresh-smoke.sh`） | register→access+refresh→pull 200→refresh 换新→pull 200→旧 refresh 作废 401→过期 access 401→refresh 重试→pull 200 全链路通过 |
+
+### 遗留
+
+- SharedPreferences 明文存 token——未来可加加密。
+- 403 处理（账号/设备失效）——设计文档第 8 节——当前服务端不返回 403——留待后续。
 - 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。

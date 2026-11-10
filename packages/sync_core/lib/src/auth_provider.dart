@@ -1,8 +1,16 @@
 /// 登录结果。
 class AuthResult {
-  const AuthResult({required this.userId, required this.token});
+  const AuthResult({
+    required this.userId,
+    required this.token,
+    this.refreshToken,
+  });
   final String userId;
   final String token;
+
+  /// refresh token（T-07）：access token 过期后用它换新。
+  /// 注册/登录/refresh 端点返回；客户端经 TokenStore 持久化。
+  final String? refreshToken;
 }
 
 /// 鉴权抽象。EmailPasswordProvider 客户端实现；SmsProvider 将后续加入。

@@ -28,7 +28,7 @@ Handler registerHandler(SyncStore store) => (req) async {
   final password = j['password'] as String;
   try {
     final r = await store.register(email, password);
-    return _okJson({'userId': r.userId, 'token': r.token});
+    return _okJson({'userId': r.userId, 'token': r.token, 'refreshToken': r.refreshToken});
   } on StateError catch (_) {
     return _err(409, 'email already registered');
   } on ArgumentError catch (_) {
@@ -43,9 +43,25 @@ Handler loginHandler(SyncStore store) => (req) async {
   try {
     final r = await store.login(email, password);
     if (r == null) return _err(401, 'invalid credentials');
-    return _okJson({'userId': r.userId, 'token': r.token});
+    return _okJson({'userId': r.userId, 'token': r.token, 'refreshToken': r.refreshToken});
   } on ArgumentError catch (_) {
     return _err(400, 'password too long');
+  }
+};
+
+/// T-07：refresh token 换新 access token（轮换 refresh）。
+Handler refreshHandler(SyncStore store) => (req) async {
+  final j = await _json(req);
+  final refreshToken = j['refreshToken'] as String;
+  try {
+    final r = await store.refresh(refreshToken);
+    return _okJson({
+      'userId': r.userId,
+      'token': r.token,
+      'refreshToken': r.refreshToken,
+    });
+  } on StateError catch (_) {
+    return _err(401, 'invalid refresh token');
   }
 };
 

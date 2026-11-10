@@ -52,4 +52,21 @@ CREATE TABLE IF NOT EXISTS sync_seq (
 
 INSERT INTO sync_seq (id, value) VALUES (1, 0) ON CONFLICT (id) DO NOTHING;
 
+-- T-07：refresh token 机制（AC-08）。
+-- access token 过期时间（NULL = 无过期，兼容 T-06 存量 token）；
+-- 新 token 由 PostgresSyncStore 写入 now() + interval '7 days'。
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+
+-- refresh token 表：30 天过期（NOT NULL——新表无存量）。
+-- refresh 端点校验 expires_at > now()，有效则轮换（DELETE 旧 + INSERT 新）。
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_id_idx
+    ON refresh_tokens (user_id);
+
 COMMIT;

@@ -6,6 +6,8 @@ abstract interface class SyncStore {
   Future<AuthResult> register(String email, String password);
   Future<AuthResult?> login(String email, String password);
   Future<String?> userIdForToken(String token);
+  /// T-07：refresh token 换新 access token（轮换 refresh）。
+  Future<AuthResult> refresh(String refreshToken);
 
   Future<SyncPullResponse> pull(String userId, int cursor);
   Future<void> push(String userId, SyncPushBatch batch);
