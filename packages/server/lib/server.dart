@@ -1,5 +1,7 @@
 export 'src/sync_store.dart';
 export 'src/fake_sync_store.dart';
+export 'src/postgres_sync_store.dart';
+export 'src/pg_config.dart';
 export 'src/password.dart';
 export 'src/handlers.dart';
 export 'src/cos_proxy.dart';

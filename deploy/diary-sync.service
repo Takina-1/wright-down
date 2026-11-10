@@ -14,6 +14,11 @@ EnvironmentFile=-/etc/diary-sync/server.env
 # on the EnvironmentFile line made systemd silently skip loading cos.env
 # (observed on this host; unit file comments stay ASCII-only).
 EnvironmentFile=-/etc/diary-sync/cos.env
+# PostgreSQL credentials (PG_HOST/PG_PORT/PG_DB/PG_USER/PG_PASSWORD).
+# NOTE: keep comment lines standalone/ASCII -- an inline comment on the
+# EnvironmentFile line made systemd silently skip loading cos.env (observed
+# on this host); the same trap applies here.
+EnvironmentFile=-/etc/diary-sync/pg.env
 ExecStart=/opt/diary-sync/bin/server
 Restart=on-failure
 RestartSec=5
