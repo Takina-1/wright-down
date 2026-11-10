@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-10（第八轮：触发循环缺陷 T-09/10/11 与照片缺口 T-12 修复关闭）
+- 最后更新：2026-11-10（第九轮：T-07 refresh token 过期刷新 + T-08 token 持久化落地，AC-08 完整实现）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -21,8 +21,8 @@
 | 编号 | 事项 | 状态 | 影响 | 关联 |
 |---|---|---|---|---|
 | T-06 | **PostgresSyncStore**（真实 SQL + 事务游标，满足 AC-07 游标原子性） | 已关闭 | 第七轮（2026-11-10）：`PostgresSyncStore` 落地——行锁取 seq、字段级 LWW、created_at 冻结；ECS 真实 PG 集成测试 5 项全过、并发 push 无丢无重、重启持久化验证通过（register→push→pull→restart→login→pull 全活）；FakeSyncStore 时代「重启即丢」缺陷关闭 | 设计 AC-07；测试报告「第七轮」 |
-| T-07 | **Token 过期与刷新**（AC-08）：token 失效 → 换 token 重试一次 → 仍失败则停同步提示重登录，不自动登出 | 未实现 | 当前 token 无过期 | 设计 AC-08 |
-| T-08 | 客户端 `InMemoryTokenStore` → SharedPreferences 持久化 | 未实现 | App 重启需重新登录 | Part 3b |
+| T-07 | **Token 过期与刷新**（AC-08）：token 失效 → 换 token 重试一次 → 仍失败则停同步提示重登录，不自动登出 | 已关闭 | 第九轮（2026-11-10）：服务端 access(7天)/refresh(30天) 双 token——expires_at 校验、`/auth/refresh` 端点、轮换防重放；客户端 RemoteRepo 401 → tokenRefresher 重试一次 → 停同步置 failed（AC-08 完整落地）；ECS 真实 PG 集成 8/8 全过 + 冒烟全链路通过 | 设计 AC-08；测试报告「第九轮」 |
+| T-08 | 客户端 `InMemoryTokenStore` → SharedPreferences 持久化 | 已关闭 | 第九轮：AuthSession 模型 + SharedPreferencesTokenStore——App 重启免登录；flutter test 458 全过 | Part 3b；测试报告「第九轮」 |
 
 ## C. 运维与部署
 
@@ -74,6 +74,8 @@ F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若�
 **第七轮裁决（2026-11-10）**：PostgresSyncStore 落库**合入 `main`**。依据：ECS 真实 PG 集成测试 5 项全过（语义与 FakeSyncStore 等价 + 并发 seq 串行化）、bcrypt 落库 `$2b$`、重启持久化验证通过（FakeSyncStore 时代重启即丢的缺陷关闭）；`dart analyze` 干净、本机 48 过 5 skip（PG 集成测试无 PG env 时按设计跳过）。T-01/T-02 真机 UI 交互仍留待装机弹窗可点时补做。
 
 **第八轮裁决（2026-11-10）**：触发循环缺陷 T-09/T-10/T-11 与照片缺口 T-12**合入 `main`**。依据：flutter analyze 干净（仅 pre-existing 警告）、flutter test 全量 452 项通过（新增 5 项缺陷测试）；纯客户端逻辑无服务端改动，无需 ECS 部署。真机 UI 交互验收仍留待装机弹窗可点时补做。
+
+**第九轮裁决（2026-11-10）**：T-07 refresh token 过期刷新 + T-08 token 持久化**合入 `main`**。依据：ECS 真实 PG 集成测试 8/8 全过（含 refresh/轮换/过期 3 项新增）、curl 冒烟全链路通过（register→pull→refresh→轮换→过期→重试）、本机 server 48 过 8 skip / client 458 全过、analyze 干净。AC-08 完整落地。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 
