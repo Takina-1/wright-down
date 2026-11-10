@@ -380,6 +380,52 @@ FakeSyncStore 是内存实现，ECS 上服务每次重启，全部注册账号�
 ### 未执行 / 遗留
 
 - 连接管理为单连接演示环境（并发正确性已验证；吞吐上限评估后再升级 ConnectionPool）。
-- T-07 token 过期刷新、T-08 客户端 token 持久化、T-09~T-12 触发/照片缺陷、T-13~T-23
-  运维事项见待办表。
+- T-07 token 过期刷新、T-08 客户端 token 持久化、T-13~T-23 运维事项见待办表。
+- 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
+
+## 第八轮：触发循环与照片同步缺陷修复（2026-11-10）
+
+### 目标
+
+修复 Part 3b/Part 4 终审发现的四个缺陷（T-09~T-12）：三个触发循环缺陷与两个照片同步缺口。
+
+### 实现（分支 `feat/F013-trigger-photo-fixes`，commit `10cb47a`）
+
+全部改动在 `client/lib/src/data/sync/sync_engine.dart`：
+
+- **T-09（I-2）**：`triggerPush` 的定时器回调——推送失败时 `_setState(SyncState.failed)`
+  （原实现 try/catch 吞掉异常，状态停留在 synced）。与 `triggerPull` 的状态语义对称。
+- **T-10（I-3）**：`start()` 检测 `_stateController.isClosed` 时重建流并重置
+  `SyncState.idle`（原实现 stop 关流后 start 复用死流，广播被静默丢弃）。
+- **T-11（I-1）**：`triggerPush` 拆出 `_schedulePush`，安排前登录态预检
+  （`_me()` 异步判定，未登录直接返回——登出后不浪费一次推送循环）。
+- **T-12（照片）**：新增 `_photoHash`（sha256 hex，与 FakeCos/HttpCosGateway
+  的 photoKey 口径一致）：
+  - pushOnce 上传条件改为 `photo != null && (photoKey == null || _photoHash(photo) != photoKey)`——
+    同条目换照片后 hash 不匹配即重传；
+  - pullOnce 下载条件改为 `photoKey != null && (photo == null || _photoHash(photo) != photoKey)`——
+    远端 photoKey 变更时本地旧 BLOB 被新照片覆盖。
+- `triggerPush` 接受可选 `debounce` 参数（默认 30s 不变；测试传短时长）。
+
+### 测试（新增 5 项，全部通过）
+
+| 缺陷 | 测试 | 结果 |
+|---|---|---|
+| T-09 | push 注入异常 → triggerPush → 状态置 failed | 通过 |
+| T-10 | start → stop → start → 新流可广播状态 | 通过 |
+| T-11 | 未登录 triggerPush → pushes 为空 | 通过 |
+| T-12 | 同条目换照片 → push 重传，photoKey 更新为新 hash | 通过 |
+| T-12 | 远端 photoKey 变更 → pull 重下覆盖本地 BLOB | 通过 |
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `flutter analyze client` | 干净（仅 pre-existing 警告/info） |
+| `flutter test client` 全量 | **452 项全过**（447 原有 + 5 新增） |
+| ECS 部署 | 无需——纯客户端逻辑，服务端不变 |
+
+### 遗留
+
+- T-07 token 过期刷新、T-08 客户端 token 持久化（另开轮）。
 - 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。

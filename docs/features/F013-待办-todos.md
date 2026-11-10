@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-10（第七轮：PostgresSyncStore 落库落地，T-06 关闭、T-03 已验证；见 T-29）
+- 最后更新：2026-11-10（第八轮：触发循环缺陷 T-09/10/11 与照片缺口 T-12 修复关闭）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -23,10 +23,6 @@
 | T-06 | **PostgresSyncStore**（真实 SQL + 事务游标，满足 AC-07 游标原子性） | 已关闭 | 第七轮（2026-11-10）：`PostgresSyncStore` 落地——行锁取 seq、字段级 LWW、created_at 冻结；ECS 真实 PG 集成测试 5 项全过、并发 push 无丢无重、重启持久化验证通过（register→push→pull→restart→login→pull 全活）；FakeSyncStore 时代「重启即丢」缺陷关闭 | 设计 AC-07；测试报告「第七轮」 |
 | T-07 | **Token 过期与刷新**（AC-08）：token 失效 → 换 token 重试一次 → 仍失败则停同步提示重登录，不自动登出 | 未实现 | 当前 token 无过期 | 设计 AC-08 |
 | T-08 | 客户端 `InMemoryTokenStore` → SharedPreferences 持久化 | 未实现 | App 重启需重新登录 | Part 3b |
-| T-09 | 触发循环缺陷 I-2：`triggerPush` 吞掉推送失败，状态仍显示 synced（违反「不静默失败」） | 未修 | 推送失败对用户不可见 | Part 3b 终审 |
-| T-10 | 触发循环缺陷 I-3：`stop()` 永久关闭流，`start()` 复用死流（App 目前从不调 stop，属潜伏） | 未修 | 潜伏缺陷 | Part 3b 终审 |
-| T-11 | 触发循环缺陷 I-1：未登录时 `pushOnce` 跳过，但 `triggerPush` 定时器仍触发，登出后浪费一次推送 | 未修 | 轻微 | Part 3b 终审 |
-| T-12 | 照片缺口：`setPhoto` 保留旧 photoKey → 同条目新选照片不重传；远端 photoKey 变更不清本地 BLOB 缓存 | 未修 | 照片同步在改图场景下不一致 | Part 4 终审 |
 
 ## C. 运维与部署
 
@@ -58,6 +54,10 @@
 | T-27 | **第五轮 COS 代理缺陷修复**：URL 主机/路径分隔符缺失、systemd 行内中文注释跳过 EnvironmentFile、getObject 非 200 返回错误体、签名 uriPath 缺前导斜杠、shelf_router 通配符语法 | 已关闭 | 各 commit `144ef0e`/`7d22850`/`c2bd43a`/`093efdf`/`9fa68f5`；回归测试已补；ECS 真实 COS 冒烟通过 | 缺陷修复；测试报告「第五轮」 |
 | T-28 | **真机装机验收尝试（2026-11-10）**：CA 指纹三级一致（服务器=本机=APK 内嵌）、debug APK 构建成功；装机受阻于 MIUI 安装弹窗（`INSTALL_FAILED_USER_RESTRICTED`，shell/非 root 均无法绕过）；随后完成服务端 API 等效验收（注册/登录负路径/推送/拉取/坏 token 401/COS 上传下载判存全过） | 已验证（等效） | 脚本 `scripts/f013-api-acceptance.sh`；测试报告「第六轮」 | 真机 UI 交互验收（T-01/T-02）仍留待用户可点按弹窗时补做 |
 | T-29 | **T-06 PostgresSyncStore 落库**：服务端数据从 FakeSyncStore 内存态迁移至真实 PostgreSQL——行锁取 seq（AC-07）、字段级 LWW、created_at 冻结、payload JSONB 往返；装配 PG 凭证探测 + Fake 回退；systemd 挂 pg.env | 已关闭 | ECS 真实 PG 集成测试 5 项全过（含并发 push 无丢无重）；重启持久化验证通过（register→push→pull→restart→login→pull）；bcrypt `$2b$` 落库、entries seq 无重复；本机 48 过 5 skip | 测试报告「第七轮」；commit `0189ea2`/`73ba49a`（SSL 修复） |
+| T-09 | 触发循环缺陷 I-2：`triggerPush` 吞掉推送失败，状态仍显示 synced（违反「不静默失败」） | 已关闭 | 第八轮：triggerPush 回调失败置 `SyncState.failed`（与 triggerPull 对称）；新增测试验证失败后状态 | 测试报告「第八轮」 |
+| T-10 | 触发循环缺陷 I-3：`stop()` 永久关闭流，`start()` 复用死流 | 已关闭 | 第八轮：`start()` 检测 `_stateController.isClosed` 重建流并重置 idle；新增测试验证 stop→start 后状态流恢复广播 | 测试报告「第八轮」 |
+| T-11 | 触发循环缺陷 I-1：未登录时 `triggerPush` 定时器仍触发，登出后浪费一次推送 | 已关闭 | 第八轮：triggerPush 登录态预检（`_me()` 异步判定，未登录不安排定时器）；新增测试验证未登录时 pushes 为空 | 测试报告「第八轮」 |
+| T-12 | 照片缺口：同条目新选照片不重传；远端 photoKey 变更不清本地 BLOB 缓存 | 已关闭 | 第八轮：pushOnce 按 sha256 校验重传（photoKey 恒为内容 hash）；pullOnce 本地 BLOB 与远端 key 不匹配时重下覆盖；新增 2 项测试 | 测试报告「第八轮」 |
 
 ## 合并门槛
 
@@ -72,6 +72,8 @@ F013 当前的 T-01 / T-02（真机验收）处于「未执行」状态 → 若�
 **第五轮裁决（2026-11-10）**：COS 代理代码侧完成并经 ECS 真实 COS 冒烟（注册→上传→下载字节比对→HEAD 判存 200/404 全过）**合入 `main`**。依据：server 48 项 / client 447 项测试全过、三包静态分析干净、部署脚本全链路绿、签名被真实 COS 接受。**真机双设备验收（T-24 真机子项）与 T-01/T-02 真机验收留到下一轮**（当前无真机连接）；客户端上传前压缩（T-25 缓解）同样并入真机轮评估。
 
 **第七轮裁决（2026-11-10）**：PostgresSyncStore 落库**合入 `main`**。依据：ECS 真实 PG 集成测试 5 项全过（语义与 FakeSyncStore 等价 + 并发 seq 串行化）、bcrypt 落库 `$2b$`、重启持久化验证通过（FakeSyncStore 时代重启即丢的缺陷关闭）；`dart analyze` 干净、本机 48 过 5 skip（PG 集成测试无 PG env 时按设计跳过）。T-01/T-02 真机 UI 交互仍留待装机弹窗可点时补做。
+
+**第八轮裁决（2026-11-10）**：触发循环缺陷 T-09/T-10/T-11 与照片缺口 T-12**合入 `main`**。依据：flutter analyze 干净（仅 pre-existing 警告）、flutter test 全量 452 项通过（新增 5 项缺陷测试）；纯客户端逻辑无服务端改动，无需 ECS 部署。真机 UI 交互验收仍留待装机弹窗可点时补做。
 
 真机 COS 相关的 T-05 / T-24 / T-25 同样留到下一轮，其中 **T-25（ECS 公网带宽不足）的缓解措施由 T-24 一并评估**（客户端上传前压缩最有效且不加云成本；备选是升配或加公网带宽）。
 
