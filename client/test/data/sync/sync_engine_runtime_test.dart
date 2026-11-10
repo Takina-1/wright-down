@@ -15,6 +15,8 @@ class _FakeRemote implements SyncRemote {
   int failCount = 0;
   Object? pullError;
   int pullCalls = 0;
+  /// push 注入异常：非 null 时 push 抛出。
+  Object? pushError;
   @override
   Future<SyncPullResponse> pull(String t, int c) async {
     pullCalls++;
@@ -27,7 +29,26 @@ class _FakeRemote implements SyncRemote {
   @override
   Future<void> push(String t, SyncPushBatch b) async {
     pushes.add(b);
+    final e = pushError;
+    if (e != null) throw e;
   }
+}
+
+/// 未登录替身：current() 返回 null。
+class _LoggedOutAuth implements AuthProvider {
+  @override
+  Future<AuthResult> register(String e, String p) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<AuthResult> login(String e, String p) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<AuthResult?> current() async => null;
+
+  @override
+  Future<void> signOut() async {}
 }
 
 class _FakeAuth implements AuthProvider {
@@ -196,6 +217,80 @@ void main() {
       // 防抖窗口内多次调用只安排一次 30s 定时；此处仅验证不抛错且不立即推送。
       engine.triggerPush();
       expect(remote.pushes, isEmpty, reason: '防抖窗口内不应立即推送');
+      engine.stop();
+      await repo.close();
+    });
+
+    test('T-09 push 失败置 failed（不静默）', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final remote = _FakeRemote();
+      remote.pushError = StateError('push boom');
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _FakeAuth(),
+        cos: FakeCos(),
+        now: () => DateTime.now(),
+      );
+      await repo.save(Entry(
+        id: 'e1',
+        content: 'hi',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        dayKey: '2026-11-04',
+      ));
+      // 短防抖（测试不等 30 秒）；登录态预检 + 定时器回调都在真实异步下执行。
+      engine.triggerPush(debounce: const Duration(milliseconds: 10));
+      await Future.delayed(const Duration(milliseconds: 500));
+      expect(engine.state, SyncState.failed,
+          reason: '推送失败后状态必须置 failed，不得停留在 synced');
+      engine.stop();
+      await repo.close();
+    });
+
+    test('T-10 stop 后 start 重建状态流（不死流）', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final remote = _FakeRemote();
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _FakeAuth(),
+        cos: FakeCos(),
+        now: () => DateTime.now(),
+      );
+      engine.start();
+      await _waitFor(engine, SyncState.synced);
+      engine.stop();
+      engine.start();
+      await _waitFor(engine, SyncState.synced); // start 触发的 pull 完成
+      // 重建后的流必须能继续广播状态（监听在流重建后注册）。
+      final seen = <SyncState>[];
+      engine.stateChanged.listen((s) => seen.add(s));
+      await engine.triggerPull(); // 触发一次状态迁移
+      expect(seen, contains(SyncState.syncing),
+          reason: 'start 重建的流必须能广播新状态');
+      engine.stop();
+      await repo.close();
+    });
+
+    test('T-11 未登录 triggerPush 不安排推送', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final remote = _FakeRemote();
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _LoggedOutAuth(),
+        cos: FakeCos(),
+        now: () => DateTime.now(),
+      );
+      engine.triggerPush();
+      // 登录态预检是异步的——等待其完成。
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(remote.pushes, isEmpty,
+          reason: '未登录时不应安排推送（登出后不浪费一次推送循环）');
       engine.stop();
       await repo.close();
     });
