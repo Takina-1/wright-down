@@ -7,6 +7,10 @@
 #
 # 产物在 deploy/certs/（已 .gitignore）。
 
+# Git Bash 会把 openssl -subj 的 "/CN=..." 误转成 Windows 路径
+# （与 client/test/fixtures/tls/generate.sh 同款处理）。
+export MSYS_NO_PATHCONV=1
+
 set -euo pipefail
 
 HOST_IP="8.148.158.13"
