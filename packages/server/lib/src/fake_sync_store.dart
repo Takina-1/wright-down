@@ -11,6 +11,13 @@ class _User {
   final String hash;
 }
 
+class _Token {
+  _Token(this.userId, {this.expiresAt});
+  final String userId;
+  /// access token 过期时间（毫秒）；null = 无过期（兼容 T-06 存量）。
+  final int? expiresAt;
+}
+
 class _Entry {
   _Entry(this.id, this.userId, this.createdAt, this.payload, this.seq);
   final String id;
@@ -26,7 +33,8 @@ class _Entry {
 /// `entries` 的主键一致：不同用户的日记 id 允许重复，不能互相覆盖。
 class FakeSyncStore implements SyncStore {
   final Map<String, _User> _users = {};
-  final Map<String, String> _tokens = {}; // token -> userId
+  final Map<String, _Token> _tokens = {}; // access token -> _Token
+  final Map<String, _Token> _refreshTokens = {}; // refresh token -> _Token
   final Map<(String, String), _Entry> _entries = {};
   int _seq = 0;
   int _userSeq = 0; // 用户 id 单独计数，不占用条目 seq
@@ -39,15 +47,20 @@ class FakeSyncStore implements SyncStore {
     final userId = 'u${_userSeq++}';
     _users[email] = _User(userId, email, hashPassword(password));
     final token = newToken();
-    _tokens[token] = userId;
-    return AuthResult(userId: userId, token: token);
+    final refreshToken = newToken();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _tokens[token] = _Token(userId, expiresAt: now + 7 * 24 * 3600 * 1000);
+    _refreshTokens[refreshToken] =
+        _Token(userId, expiresAt: now + 30 * 24 * 3600 * 1000);
+    return AuthResult(
+        userId: userId, token: token, refreshToken: refreshToken);
   }
 
   @override
   Future<AuthResult?> login(String email, String password) async {
     final u = _users[email];
     if (u == null) {
-      // 对不存在的邮箱同样执行一次 bcrypt，使响应耗时与"密码错误"不可区分。
+      // 对不存在的邮箱同样执行一次 bcrypt，使响应耗时与“密码错误”不可区分。
       hashPassword(password);  // throws ArgumentError for >72 bytes
       return null;
     }
@@ -56,12 +69,44 @@ class FakeSyncStore implements SyncStore {
     }
     if (!verifyPassword(password, u.hash)) return null;
     final token = newToken();
-    _tokens[token] = u.userId;
-    return AuthResult(userId: u.userId, token: token);
+    final refreshToken = newToken();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _tokens[token] = _Token(u.userId, expiresAt: now + 7 * 24 * 3600 * 1000);
+    _refreshTokens[refreshToken] =
+        _Token(u.userId, expiresAt: now + 30 * 24 * 3600 * 1000);
+    return AuthResult(
+        userId: u.userId, token: token, refreshToken: refreshToken);
   }
 
   @override
-  Future<String?> userIdForToken(String token) async => _tokens[token];
+  Future<String?> userIdForToken(String token) async {
+    // T-07：过期 token 视为失效（expiresAt 为 null 兼容存量）。
+    final t = _tokens[token];
+    if (t == null) return null;
+    if (t.expiresAt != null && t.expiresAt! <= DateTime.now().millisecondsSinceEpoch) {
+      return null;
+    }
+    return t.userId;
+  }
+
+  @override
+  Future<AuthResult> refresh(String refreshToken) async {
+    final t = _refreshTokens[refreshToken];
+    if (t == null ||
+        (t.expiresAt != null &&
+            t.expiresAt! <= DateTime.now().millisecondsSinceEpoch)) {
+      throw StateError('invalid refresh token');
+    }
+    // 轮换：旧 refresh 作废，签发新 access + 新 refresh。
+    _refreshTokens.remove(refreshToken);
+    final newRefresh = newToken();
+    final newAccess = newToken();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _refreshTokens[newRefresh] =
+        _Token(t.userId, expiresAt: now + 30 * 24 * 3600 * 1000);
+    _tokens[newAccess] = _Token(t.userId, expiresAt: now + 7 * 24 * 3600 * 1000);
+    return AuthResult(userId: t.userId, token: newAccess, refreshToken: newRefresh);
+  }
 
   @override
   Future<SyncPullResponse> pull(String userId, int cursor) async {

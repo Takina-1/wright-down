@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sync_core/sync_core.dart';
 
@@ -50,14 +51,22 @@ class _StartupState extends State<_Startup> {
     );
     final httpClient = http.Client();
     final baseUrl = syncBaseUrl();
+    // T-08：token 经 SharedPreferences 持久化——App 重启免登录。
+    final prefs = await SharedPreferences.getInstance();
     final auth = EmailPasswordProvider(
       httpClient,
       baseUrl,
-      InMemoryTokenStore(),
+      SharedPreferencesTokenStore(prefs),
     );
     final engine = SyncEngine(
       repository: repository,
-      remote: RemoteRepo(httpClient, baseUrl, const SyncCodec()),
+      // T-07：RemoteRepo 401 → tokenRefresher 换新 access token 重试一次。
+      remote: RemoteRepo(
+        httpClient,
+        baseUrl,
+        const SyncCodec(),
+        tokenRefresher: () => auth.refresh().then((r) => r.token),
+      ),
       auth: auth,
       // FakeCos 是开发期占位实现（本地临时目录）；真机经
       // `--dart-define=USE_COS_HTTP=true` 切到 HttpCosGateway（照片走

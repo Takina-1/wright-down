@@ -38,5 +38,46 @@ void main() {
       final r = await repo.register('a@b.com', 'pw');
       expect(r.token, 'tok');
     });
+
+    test('T-07 refresh 换新 token', () async {
+      Future<http.Response> handler(http.Request req) async => http.Response(
+        jsonEncode({'userId': 'u1', 'token': 'new', 'refreshToken': 'rt2'}), 200,
+        headers: {'content-type': 'application/json'});
+      final repo = RemoteRepo(http.Client(), 'http://x', const SyncCodec(), handler: handler);
+      final r = await repo.refresh('rt');
+      expect(r.token, 'new');
+      expect(r.refreshToken, 'rt2');
+    });
+
+    test('T-07 pull 401 → tokenRefresher 重试一次成功', () async {
+      var calls = 0;
+      Future<http.Response> handler(http.Request req) async {
+        calls++;
+        if (calls == 1) return http.Response('invalid token', 401);
+        return http.Response(
+          jsonEncode({'cursor': 0, 'entries': []}), 200,
+          headers: {'content-type': 'application/json'});
+      }
+      var refreshed = false;
+      final repo = RemoteRepo(http.Client(), 'http://x', const SyncCodec(),
+        handler: handler,
+        tokenRefresher: () async {
+          refreshed = true;
+          return 'new-tok';
+        });
+      final r = await repo.pull('old-tok', 0);
+      expect(r.cursor, 0);
+      expect(refreshed, isTrue);
+      expect(calls, 2);
+    });
+
+    test('T-07 pull 401 → refresh 后仍 401 抛 StateError', () async {
+      Future<http.Response> handler(http.Request req) async =>
+          http.Response('invalid token', 401);
+      final repo = RemoteRepo(http.Client(), 'http://x', const SyncCodec(),
+        handler: handler,
+        tokenRefresher: () async => 'new-tok');
+      await expectLater(repo.pull('old-tok', 0), throwsA(isA<StateError>()));
+    });
   });
 }

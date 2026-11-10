@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:postgres/postgres.dart';
 import 'package:server/server.dart';
 import 'package:sync_core/sync_core.dart';
 import 'package:test/test.dart';
@@ -245,6 +246,79 @@ void main() {
         expect(p1.cursor > 0, isTrue);
         expect(await store.pull(u1, p1.cursor).then((r) => r.entries), isEmpty);
         expect(await store.pull(u2, p2.cursor).then((r) => r.entries), isEmpty);
+      } finally {
+        await store.close();
+      }
+    });
+
+    test('T-07 register/login 返回 refreshToken', skip: skip, () async {
+      final store = await PostgresSyncStore.connect(
+        PgConfig.fromEnv(Platform.environment)!,
+      );
+      try {
+        final email =
+            'pg-refresh-${DateTime.now().millisecondsSinceEpoch}@local.test';
+        final r = await store.register(email, 'pw');
+        expect(r.refreshToken, isNotNull);
+        expect(r.refreshToken, isNotEmpty);
+        final r2 = await store.login(email, 'pw');
+        expect(r2!.refreshToken, isNotNull);
+        expect(r2.refreshToken, isNotEmpty);
+      } finally {
+        await store.close();
+      }
+    });
+
+    test('T-07 refresh 轮换：旧 refresh 作废，新 token 有效', skip: skip,
+        () async {
+      final store = await PostgresSyncStore.connect(
+        PgConfig.fromEnv(Platform.environment)!,
+      );
+      try {
+        final email =
+            'pg-refresh-${DateTime.now().millisecondsSinceEpoch}@local.test';
+        final r = await store.register(email, 'pw');
+        final oldRefresh = r.refreshToken!;
+        final r2 = await store.refresh(oldRefresh);
+        expect(r2.token, isNot(r.token));
+        expect(r2.refreshToken, isNot(oldRefresh));
+        // 旧 refresh 作废
+        await expectLater(
+            store.refresh(oldRefresh), throwsA(isA<StateError>()));
+        // 新 refresh 有效
+        final r3 = await store.refresh(r2.refreshToken!);
+        expect(r3.token, isNotEmpty);
+      } finally {
+        await store.close();
+      }
+    });
+
+    test('T-07 access token 过期 → userIdForToken null', skip: skip, () async {
+      final config = PgConfig.fromEnv(Platform.environment)!;
+      final store = await PostgresSyncStore.connect(config);
+      try {
+        final email =
+            'pg-expire-${DateTime.now().millisecondsSinceEpoch}@local.test';
+        final r = await store.register(email, 'pw');
+        // 用独立连接把 access token 的 expires_at 设为过去（模拟过期）。
+        final conn = await Connection.open(
+          Endpoint(
+            host: config.host,
+            port: config.port,
+            database: config.db,
+            username: config.user,
+            password: config.password,
+          ),
+          settings: ConnectionSettings(sslMode: SslMode.disable),
+        );
+        await conn.execute(
+          'UPDATE tokens SET expires_at = now() - interval \'1 day\' '
+          'WHERE token = \$1',
+          parameters: [r.token],
+        );
+        await conn.close();
+        // 过期 token 视为失效
+        expect(await store.userIdForToken(r.token), isNull);
       } finally {
         await store.close();
       }

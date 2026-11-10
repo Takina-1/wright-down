@@ -21,6 +21,7 @@ Handler createApp(SyncStore store,
   final router = Router()
     ..post('/auth/register', registerHandler(store))
     ..post('/auth/login', loginHandler(store))
+    ..post('/auth/refresh', refreshHandler(store))
     ..get('/sync', pullHandler(store))
     ..post('/sync/batch', pushHandler(store));
 

@@ -62,15 +62,22 @@ class PostgresSyncStore implements SyncStore {
     final hash = hashPassword(password);
     final userId = _userId();
     final token = newToken();
+    final refreshToken = newToken();
     await _conn.execute(
       'INSERT INTO users (id, email, password_hash) VALUES (\$1, \$2, \$3)',
       parameters: [userId, email, hash],
     );
     await _conn.execute(
-      'INSERT INTO tokens (token, user_id) VALUES (\$1, \$2)',
+      'INSERT INTO tokens (token, user_id, expires_at) '
+      "VALUES (\$1, \$2, now() + interval '7 days')",
       parameters: [token, userId],
     );
-    return AuthResult(userId: userId, token: token);
+    await _conn.execute(
+      'INSERT INTO refresh_tokens (token, user_id, expires_at) '
+      "VALUES (\$1, \$2, now() + interval '30 days')",
+      parameters: [refreshToken, userId],
+    );
+    return AuthResult(userId: userId, token: token, refreshToken: refreshToken);
   }
 
   @override
@@ -93,20 +100,67 @@ class PostgresSyncStore implements SyncStore {
       return null;
     }
     final token = newToken();
+    final refreshToken = newToken();
     await _conn.execute(
-      'INSERT INTO tokens (token, user_id) VALUES (\$1, \$2)',
+      'INSERT INTO tokens (token, user_id, expires_at) '
+      "VALUES (\$1, \$2, now() + interval '7 days')",
       parameters: [token, row[0] as String],
     );
-    return AuthResult(userId: row[0] as String, token: token);
+    await _conn.execute(
+      'INSERT INTO refresh_tokens (token, user_id, expires_at) '
+      "VALUES (\$1, \$2, now() + interval '30 days')",
+      parameters: [refreshToken, row[0] as String],
+    );
+    return AuthResult(
+        userId: row[0] as String, token: token, refreshToken: refreshToken);
   }
 
   @override
   Future<String?> userIdForToken(String token) async {
+    // T-07：access token 过期（expires_at <= now()）视为失效 → null（401）。
+    // expires_at IS NULL 兼容存量 token（无过期）。
     final result = await _conn.execute(
-      'SELECT user_id FROM tokens WHERE token = \$1',
+      'SELECT user_id FROM tokens '
+      'WHERE token = \$1 AND (expires_at IS NULL OR expires_at > now())',
       parameters: [token],
     );
     return result.isEmpty ? null : result.first[0] as String;
+  }
+
+  /// T-07：refresh token 换新 access token（轮换 refresh）。
+  /// refresh token 过期/不存在 → StateError（handler 401）；
+  /// 有效 → 事务内 DELETE 旧 refresh + INSERT 新 refresh（30 天）+ 新 access（7 天）。
+  Future<AuthResult> refresh(String refreshToken) async {
+    final row = await _conn.execute(
+      'SELECT user_id FROM refresh_tokens '
+      'WHERE token = \$1 AND expires_at > now()',
+      parameters: [refreshToken],
+    );
+    if (row.isEmpty) {
+      throw StateError('invalid refresh token');
+    }
+    final userId = row.first[0] as String;
+    return _conn.runTx<AuthResult>((tx) async {
+      // 轮换：旧 refresh token 作废（防重放）。
+      await tx.execute(
+        'DELETE FROM refresh_tokens WHERE token = \$1',
+        parameters: [refreshToken],
+      );
+      final newRefresh = newToken();
+      final newAccess = newToken();
+      await tx.execute(
+        'INSERT INTO refresh_tokens (token, user_id, expires_at) '
+        "VALUES (\$1, \$2, now() + interval '30 days')",
+        parameters: [newRefresh, userId],
+      );
+      await tx.execute(
+        'INSERT INTO tokens (token, user_id, expires_at) '
+        "VALUES (\$1, \$2, now() + interval '7 days')",
+        parameters: [newAccess, userId],
+      );
+      return AuthResult(
+          userId: userId, token: newAccess, refreshToken: newRefresh);
+    });
   }
 
   @override
