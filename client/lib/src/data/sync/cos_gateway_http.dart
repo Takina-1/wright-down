@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:sync_core/sync_core.dart';
 
+import '../remote/tls_trust.dart';
+
 /// 照片同步异常：网络失败 / 服务端拒绝统一抛这个，UI 层按 catch 处理。
 class PhotoSyncError implements Error {
   const PhotoSyncError(this.message);
@@ -29,20 +31,23 @@ class HttpCosGateway implements CosGateway {
     required this.tokenLoader,
     http.Client? client,
     Future<http.StreamedResponse> Function(http.Request request)? handler,
-  }) : _client = client ?? http.Client(),
+  }) : _client = client,
         this._handler = handler;
 
   final String baseUrl;
   /// 当前登录 token；未登录返回 null。
   final Future<String?> Function() tokenLoader;
-  final http.Client _client;
+  /// 注入的 client；为空时惰性取可信 client（系统 CA ∪ 自签 CA）。
+  /// 不能退化成 `http.Client()` —— 那会走不受信的 TLS 栈，与真机缺陷同款陷阱。
+  final http.Client? _client;
   final Future<http.StreamedResponse> Function(
       http.Request request)? _handler;
 
-  Future<http.StreamedResponse> _send(http.Request request) {
+  Future<http.StreamedResponse> _send(http.Request request) async {
     final handler = _handler;
     if (handler != null) return handler(request);
-    return _client.send(request);
+    final client = _client ?? await TlsTrust.instance.client();
+    return client.send(request);
   }
 
   @override
