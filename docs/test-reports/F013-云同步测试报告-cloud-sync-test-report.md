@@ -468,3 +468,38 @@ AC-08 完整落地：服务端 refresh token 机制；客户端 401 → refresh 
 - SharedPreferences 明文存 token——未来可加加密。
 - 403 处理（账号/设备失效）——设计文档第 8 节——当前服务端不返回 403——留待后续。
 - 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
+
+## 第十轮：D 节质量改进（2026-11-10）
+
+### 目标
+
+清理评审 Minor 项（T-18~T-23）——纯代码/脚本小改，无服务端行为变更。
+
+### 改动（分支 `feat/F013-quality-minors`，commit `30aa251`）
+
+| 编号 | 改动 | 位置 |
+|---|---|---|
+| T-18 | `PORT` 范围校验（1–65535），非法值回落 8080 | `server_config.dart` |
+| T-19 | `verifyPassword` 捕获从 `on Object` 收窄为 `on ArgumentError` | `password.dart` |
+| T-20 | CA-pair guard 同时检查 `ca.key` 与 `ca.crt` | `make-cert.sh` |
+| T-21 | 健康检查断言 401——第四轮已实现，T-06/T-07 ECS 部署健康检查均验证通过——关闭 | `deploy-app.sh` |
+| T-22 | `deploy-app.sh` 加执行位（100644 → 100755） | `deploy-app.sh` |
+| T-23 | 清理 `unused_field _undoableEntryId`（F005 遗留） | `home_page.dart` |
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `dart analyze packages/server` | No issues found |
+| `dart test packages/server` | 48 过 + 8 skip |
+| `flutter analyze client` | 0 error（仅 pre-existing warning/info） |
+| `flutter test client` 全量 | 458 项全过 |
+| `bash -n deploy/make-cert.sh` | 语法检查通过 |
+| ECS 部署 | 无需——纯代码/脚本小改，无服务端行为变更 |
+
+### 遗留
+
+- C 节运维事项（T-13 release 签名、T-15 规格变配、T-16 RAM 策略附加）需用户输入/停机决策。
+- T-17 nginx 扫描器限流——线上变更，待用户确认后执行。
+- T-25 ECS 带宽——已知限制，用户已知悉。
+- 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
