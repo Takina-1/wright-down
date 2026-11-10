@@ -165,11 +165,37 @@ Git Bash 下需 `export MSYS_NO_PATHCONV=1`（脚本内部已处理），否则 
 的 `/CN=` 会被误转成 Windows 路径。
 ```
 
-- [ ] **Step 5: 提交**
+- [ ] **Step 5: 在 `.gitignore` 放行测试私钥**
+
+仓库 `.gitignore:96` 有 `*.key`，会把本任务的测试私钥静默排除（实测：`git add <目录>` 只入库 `.crt`，`.key` 被跳过且不报错）。在 `.gitignore` 的 `*.key` 规则**之后**加例外行：
+
+```gitignore
+*.key
+# 测试专用 TLS 夹具的私钥需要入库（仅用于自动化测试，与生产 CA 无关）。
+!client/test/fixtures/tls/*.key
+```
+
+Verify:
+```bash
+cd D:/dev/myapp && git check-ignore -v client/test/fixtures/tls/test_ca.key || echo "(NOT ignored — OK)"
+```
+Expected: 输出 `NOT ignored — OK`。
+
+若仍被忽略，说明例外行位置不对（必须在 `*.key` 之后）——gitignore 后面的规则优先。
+
+- [ ] **Step 6: 提交**
 
 ```bash
 cd D:/dev/myapp
-git add client/test/fixtures/tls/
+git add .gitignore client/test/fixtures/tls/
+git status --short client/test/fixtures/tls/ .gitignore
+```
+
+**提交前必须确认**：`git status --short` 输出里 **同时**有 `test_ca.key`、`test_server.key`、`test_ca.crt`、`test_server.crt`、`generate.sh`、`README.md` 六项。若 `.key` 不在其中 → 例外行没生效，回到 Step 5。
+
+确认齐全后：
+
+```bash
 git commit -m "test(F013):新增TLS测试夹具,add TLS test fixtures"
 ```
 
