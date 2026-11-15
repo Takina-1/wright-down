@@ -3,7 +3,7 @@
 - 关联功能：F013 云同步最小闭环（本次在其分支上执行，见 §7 分支与编号）
 - 关联文档：[云同步设计](云同步设计-cloud-sync-design.md) · [腾讯云 COS 设计](腾讯云COS对象存储-tencent-cos-storage-design.md) · [F013 待办登记](../features/F013-待办-todos.md) · [F013 测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md)
 - 日期：2026-11-10
-- 状态：设计已批准（2026-11-10 brainstorming）
+- 状态：已实现（2026-11-15，含真机验收证据）
 
 ## 1. 背景
 
