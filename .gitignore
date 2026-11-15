@@ -94,4 +94,6 @@ $RECYCLE.BIN/
 # TLS 证书与私钥：本地生成，CA 私钥永不入库
 deploy/certs/
 *.key
+# 测试专用 TLS 夹具的私钥需要入库（仅用于自动化测试，与生产 CA 无关）。
+!client/test/fixtures/tls/*.key
 *.pem

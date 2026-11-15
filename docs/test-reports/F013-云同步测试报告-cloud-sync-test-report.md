@@ -503,3 +503,44 @@ AC-08 完整落地：服务端 refresh token 机制；客户端 401 → refresh 
 - T-17 nginx 扫描器限流——线上变更，待用户确认后执行。
 - T-25 ECS 带宽——已知限制，用户已知悉。
 - 真机 UI 交互（T-01/T-02/T-04）仍待装机弹窗可点时补做。
+
+## 第十一轮：安卓真机 TLS 信任修复与端到端验收（2026-11-15）
+
+### 目标与根因
+
+打通 F013 T-01/T-02 真机验收。根因确认 —— Flutter `dart:io` 网络栈**不读**
+`network_security_config.xml`，自签 CA 虽随 APK 分发在 `res/raw/diary_ca.crt`，Dart 层却看不到，
+TLS 握手在收到服务器证书后即中止，真机注册必然失败（证据链：`libflutter.so` 中
+`networkSecurityConfig` 出现 0 次，见设计文档 §4）。
+
+### 修复
+
+新增 `TlsTrust`（`SecurityContext(withTrustedRoots: true)` + `setTrustedCertificatesBytes`），
+CA 以 asset 随包分发，主流程与照片代理共用同一可信 client；`deploy/make-cert.sh` 自动同步两处 CA 副本。
+详见设计文档与分支 `feat/F013-android-tls-trust`。
+
+### 验证
+
+| 项 | 值 |
+|---|---|
+| 被测版本 | `feat/F013-android-tls-trust` + `client/build/app/outputs/flutter-apk/app-debug.apk`（`--dart-define=SYNC_BASE_URL=https://8.148.158.13 --dart-define=USE_COS_HTTP=true`） |
+| 环境 | 小米 2211133C（Android 15 / MIUI）、ECS `8.148.158.13`（nginx TLS 443 + systemd `diary-sync` + PostgreSQL） |
+| 缺陷根因 | `dart:io` 不读 `network_security_config.xml`；证据链见设计文档 §4 |
+| 修复 | `TlsTrust`（`SecurityContext(withTrustedRoots: true)` + `setTrustedCertificatesBytes`） |
+| 命令 | `..\scripts\flutter.ps1 analyze` / `test` / `build apk --debug` |
+| 宿主结果 | analyze 仅 pre-existing 警告/info、无新增；`flutter test` **461 项全过**（基线 458 + TlsTrust 3） |
+| 真机 T-01 | nginx `POST /auth/register` **200**，UA `Dart/3.13 (dart:io)`（19:22:59）；psql 用户 `f013-device-1794741769@local.test` 落库（`$2b$` bcrypt）——**已验证** |
+| 真机 T-02 | nginx `POST /sync/batch` **200**，UA `Dart/3.13 (dart:io)`（19:27:17）；psql 条目 `9267c356-…` 落库，payload `{"v":"T02-device-push-test-…"}`，seq 24——**已验证** |
+| APK 内嵌 CA | `assets/flutter_assets/assets/diary_ca.crt`，`subject=CN=Local Diary App CA`，sha256 指纹 `7C:ED:3A:…:7E:00`，与服务器/本机一致 |
+| logcat | 无 `HandshakeException`/`CERTIFICATE_VERIFY`（与 nginx 200 一致） |
+| 验收编号 | T-01（注册）、T-02（推送）已验证；T-04（跨设备）、T-24（真机照片）未执行 |
+| 失败项 | 无 |
+| 未测范围 | 双设备交叉同步（T-04 第二台设备）、真机照片链路（T-24）、release APK（仍 debug 签名，T-13） |
+
+> 装机说明：旧 APK（11-10 debug 签名）与新 APK 签名不匹配，`adb install -r` 报
+> `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，先卸载再全新安装；MIUI 安装弹窗需人工点确认
+> （无法无头绕过，经 `am start` VIEW 意图拉起安装器完成）。
+
+### 遗留
+
+新增待办 T-30（私有 CA 内嵌 APK 公开分发风险）/ T-31（登录失败吞掉底层原因）/ T-32（未登录状态误显「已同步」），见 [待办表](../features/F013-待办-todos.md)。

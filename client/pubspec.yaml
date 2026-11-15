@@ -34,6 +34,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # 自签 CA 证书：Dart 侧 TLS 信任锚点来源（dart:io 不读 network_security_config.xml）。
+  assets:
+    - assets/diary_ca.crt
 
 # sqlite3 is brought in only by host-side FFI tests. The Android app uses
 # sqflite's platform implementation, not Dart FFI or a bundled SQLite binary.

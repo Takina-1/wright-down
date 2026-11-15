@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sync_core/sync_core.dart';
 
 import 'app.dart';
+import 'src/data/remote/tls_trust.dart';
 import 'src/config/sync_config.dart';
 import 'src/data/local/sqlite_entry_repository.dart';
 import 'src/data/remote/email_password_provider.dart';
@@ -49,7 +50,9 @@ class _StartupState extends State<_Startup> {
       factory: databaseFactory,
       path: path.join(await getDatabasesPath(), 'local_diary.db'),
     );
-    final httpClient = http.Client();
+    // TlsTrust：系统 CA ∪ 内嵌自签 CA。dart:io 不读 network_security_config.xml，
+    // 自签 CA 必须在 Dart 侧显式信任，否则真机 TLS 握手必失败。
+    final httpClient = await TlsTrust.instance.client();
     final baseUrl = syncBaseUrl();
     // T-08：token 经 SharedPreferences 持久化——App 重启免登录。
     final prefs = await SharedPreferences.getInstance();
@@ -97,7 +100,11 @@ class _StartupState extends State<_Startup> {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('暂时无法打开本地存储'),
+                      const Text('暂时无法准备同步环境'),
+                      const SizedBox(height: 8),
+                      Text('${snapshot.error}',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error)),
                       TextButton(
                         onPressed: () => setState(() {
                           _engine = _open();
