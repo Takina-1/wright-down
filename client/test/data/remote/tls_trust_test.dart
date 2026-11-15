@@ -17,7 +17,7 @@ void main() {
 
   const fixtureDir = 'test/fixtures/tls';
 
-  Future<HttpServer> _startTlsServer() async {
+  Future<HttpServer> startTlsServer() async {
     final ctx = SecurityContext()
       ..useCertificateChain('$fixtureDir/test_server.crt')
       ..usePrivateKey('$fixtureDir/test_server.key');
@@ -50,7 +50,7 @@ void main() {
     });
 
     test('追加信任锚点后，能连上自签证书的本地 TLS 服务器', () async {
-      final server = await _startTlsServer();
+      final server = await startTlsServer();
       addTearDown(() => server.close(force: true));
 
       final untrusted = http.Client();
