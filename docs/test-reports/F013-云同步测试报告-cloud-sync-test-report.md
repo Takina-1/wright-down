@@ -544,3 +544,35 @@ CA 以 asset 随包分发，主流程与照片代理共用同一可信 client；
 ### 遗留
 
 新增待办 T-30（私有 CA 内嵌 APK 公开分发风险）/ T-31（登录失败吞掉底层原因）/ T-32（未登录状态误显「已同步」），见 [待办表](../features/F013-待办-todos.md)。
+
+## 第十二轮：T-31 登录错误透出与 T-32 未登录状态语义（2026-11-15）
+
+### 目标
+
+清理第十一轮新发现的两项客户端问题：登录/注册失败吞掉底层原因（T-31）、未登录时同步状态误显「已同步」（T-32）。
+
+### 修复（分支 `feat/F013-sync-error-transparency`）
+
+- **T-31**（`client/lib/src/ui/sync/login_page.dart`）：`_submit` 的 `catch (_)` 改为 `catch (e)`，新增 `_describe(e)` 把异常转成可读描述——`HandshakeException`→「TLS 握手失败（服务器证书未通过校验）」、`SocketException`→「网络连接失败」、`StateError`→其消息、其余回退 `e.toString()`。错误文案由笼统「注册失败，请重试」改为「注册失败：${_describe(e)}」，透出底层原因便于真机排障。
+- **T-32**（`client/lib/src/data/sync/sync_engine.dart`）：`triggerPull` 增加登录预检——`_me()` 返回 null 时直接返回，不置 `synced`，与 `triggerPush` 的 T-11 登录预检对称。此前未登录时 `pullOnce` 提前返回不抛异常，`triggerPull` 会把状态置为 `synced`（误显「已同步」）。
+
+### 测试（新增 2 项，全部通过）
+
+| 编号 | 测试 | 结果 |
+|---|---|---|
+| T-31 | 登录失败透出 TLS 握手异常原因（`HandshakeException` → TLS 文案） | 通过 |
+| T-32 | 未登录 `triggerPull` 不置 `synced`（状态保持 idle、不发起拉取） | 通过 |
+
+> T-31 同时更新了 `login_page_test` 既有 2 处失败文案断言（`StateError` 消息透出）。
+
+### 验证
+
+| 检查 | 结果 |
+|---|---|
+| `flutter analyze` | 仅 pre-existing 4 项（无新增） |
+| `flutter test` 全量 | **463 项全过**（461 原有 + 2 新增） |
+
+### 遗留
+
+- T-30（私有 CA 内嵌 APK 公开分发风险）留待公开发布前处理。
+- T-04（跨设备第二台）、T-24（真机照片链路）仍待第二台设备。

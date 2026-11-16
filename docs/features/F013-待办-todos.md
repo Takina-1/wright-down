@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-15（第十一轮：安卓真机 TLS 信任修复，T-01/T-02 真机验收通过，新增 T-30/31/32）
+- 最后更新：2026-11-15（第十一轮真机 TLS 信任验收已合并；第十二轮：T-31/T-32 错误透出与状态语义修复）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -64,8 +64,8 @@
 | 编号 | 事项 | 状态 | 说明 |
 |---|---|---|---|
 | T-30 | **私有 CA 内嵌 APK 的公开发布风险**：任何人反编译 APK 即可提取该 CA 公钥，APK 外泄时等同于「信任任意人自签证书」的钥匙 | 未处理 | 公开分发前必须改用公开可信证书（域名 + Let's Encrypt 自动续期） |
-| T-31 | **登录/注册失败吞掉真实原因**：`login_page.dart` 的 `catch (_)` 只显示「注册失败，请重试」，`HandshakeException` 等底层原因丢失 | 未处理 | 本轮已让 TLS 修复，但错误透出仍缺 —— 建议显示异常类型与消息 |
-| T-32 | **未登录时状态误显示「已同步」**：`sync_engine.dart` 的 `triggerPull` 在 `_me()` 返回 null 时提前返回、不抛异常，状态被置为 `synced` | 未处理 | 与 T-09/T-10 同类（不静默失败）；建议未登录时不置 synced |
+| T-31 | **登录/注册失败吞掉真实原因**：`login_page.dart` 的 `catch (_)` 只显示「注册失败，请重试」，`HandshakeException` 等底层原因丢失 | 已关闭 | 第十二轮（2026-11-15）：`catch (e)` 透出异常描述（`_describe`：`HandshakeException`→TLS 握手失败、`SocketException`→网络连接失败、`StateError`→消息），不再只显示笼统「失败，请重试」；新增 TLS 透出测试 |
+| T-32 | **未登录时状态误显示「已同步」**：`sync_engine.dart` 的 `triggerPull` 在 `_me()` 返回 null 时提前返回、不抛异常，状态被置为 `synced` | 已关闭 | 第十二轮（2026-11-15）：`triggerPull` 增加登录预检（`_me()` 返回 null 直接返回），未登录不再置 `synced`，与 `triggerPush` 的 T-11 对称；新增测试验证未登录不置 synced |
 
 ## 合并门槛
 
@@ -91,5 +91,7 @@ F013 的 T-01 / T-02（真机验收）已于第十一轮（2026-11-15）在真�
 
 **第十一轮裁决（2026-11-15）**：安卓真机 TLS 信任修复（`TlsTrust`）+ T-01/T-02 真机验收**合入 `main`**。依据：根因确认为 `dart:io` 不读 `network_security_config.xml`，新增 `TlsTrust` 使自签 CA 在 Dart 层被信任；宿主 analyze 无新增问题、`flutter test` 461 项全过；真机注册（`POST /auth/register` 200，Dart UA）与推送（`POST /sync/batch` 200，条目落库）均已验证，logcat 无握手异常。T-04（跨设备第二台）与 T-24（真机照片）留待下一轮。
 
-下一轮补做 T-04（跨设备第二台拉回）与 T-24（真机照片链路），再评估 T-25 带宽缓解。
+**第十二轮裁决（2026-11-15）**：T-31 登录/注册失败透出底层原因 + T-32 未登录不置 synced**合入 `main`**。依据：`login_page` 的 `catch` 改为透出异常描述（TLS/网络/StateError 分型），`sync_engine.triggerPull` 增加登录预检与 `triggerPush` 对称；宿主 analyze 无新增、`flutter test` 463 项全过（新增 2 项缺陷测试）。纯客户端小改，无服务端行为变更。
+
+下一轮补做 T-04（跨设备第二台拉回）与 T-24（真机照片链路），再评估 T-25 带宽缓解；T-30（私有 CA 公开分发风险）留待公开发布前处理。
 
