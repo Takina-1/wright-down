@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:local_diary/src/data/sync/sync_engine.dart';
@@ -12,20 +14,27 @@ import '../../support/memory_repository.dart';
 class _FakeAuth implements AuthProvider {
   bool loginShouldFail = false;
   bool registerShouldFail = false;
+  /// 自定义抛出的异常（如 [HandshakeException]）；未设时用默认 [StateError]。
+  Object? loginError;
+  Object? registerError;
   int loginCalls = 0;
   int registerCalls = 0;
 
   @override
   Future<AuthResult> register(String e, String p) async {
     registerCalls++;
-    if (registerShouldFail) throw StateError('register failed');
+    if (registerShouldFail) {
+      throw registerError ?? StateError('register failed');
+    }
     return const AuthResult(userId: 'u1', token: 'tok');
   }
 
   @override
   Future<AuthResult> login(String e, String p) async {
     loginCalls++;
-    if (loginShouldFail) throw StateError('invalid email or password');
+    if (loginShouldFail) {
+      throw loginError ?? StateError('invalid email or password');
+    }
     return const AuthResult(userId: 'u1', token: 'tok');
   }
 
@@ -185,7 +194,7 @@ void main() {
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
 
-    expect(find.text('登录失败，请重试'), findsOneWidget);
+    expect(find.text('登录失败：invalid email or password'), findsOneWidget);
     expect(find.textContaining('要把本机'), findsNothing);
     expect(engine.pushes, 0);
   });
@@ -228,7 +237,33 @@ void main() {
     await tester.tap(find.text('注册'));
     await tester.pumpAndSettle();
 
-    expect(find.text('注册失败，请重试'), findsOneWidget);
+    expect(find.text('注册失败：register failed'), findsOneWidget);
     expect(auth.registerCalls, 1);
+  });
+
+  testWidgets('登录失败透出 TLS 握手异常原因（T-31）', (tester) async {
+    final repo = MemoryRepository();
+    final auth = _FakeAuth()
+      ..loginShouldFail = true
+      ..loginError = HandshakeException('cert verify failed');
+    final engine = _FakeSyncEngine();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LoginPage(auth: auth, syncEngine: engine, repository: repo),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _enterCredentials(tester);
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    // T-31：不再只显示笼统「登录失败，请重试」，而是透出 TLS 握手失败这一底层原因。
+    expect(
+      find.text('登录失败：TLS 握手失败（服务器证书未通过校验）'),
+      findsOneWidget,
+    );
   });
 }

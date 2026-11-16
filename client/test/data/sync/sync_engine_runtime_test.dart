@@ -295,4 +295,29 @@ void main() {
       await repo.close();
     });
   });
+
+  group('triggerPull', () {
+    test('T-32 未登录 triggerPull 不置 synced', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final remote = _FakeRemote();
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _LoggedOutAuth(),
+        cos: FakeCos(),
+        now: () => DateTime.now(),
+      );
+      final sub = engine.stateChanged.listen((_) {});
+      await engine.triggerPull();
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(engine.state, SyncState.idle,
+          reason: '未登录时 triggerPull 不应置 synced（保持 idle，'
+              '与 triggerPush 登录预检对称）');
+      expect(remote.pullCalls, 0, reason: '未登录不应发起拉取请求');
+      await sub.cancel();
+      engine.stop();
+      await repo.close();
+    });
+  });
 }

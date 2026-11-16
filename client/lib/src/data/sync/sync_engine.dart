@@ -185,10 +185,13 @@ class SyncEngine {
     _stateController.close();
   }
 
-  /// 触发一次拉取：已在同步中则忽略；成功置 [SyncState.synced]，失败置
+  /// 触发一次拉取：已在同步中则忽略；未登录则直接返回、不置 [SyncState.synced]
+  /// （与 [triggerPush] 的登录预检对称，T-32）；成功置 [SyncState.synced]，失败置
   /// [SyncState.failed]（401/格式错误/退避耗尽均归为失败，UI 监听 failed 提示）。
   Future<void> triggerPull() async {
     if (state == SyncState.syncing) return;
+    final me = await _me();
+    if (me == null) return; // T-32：未登录不拉取、不置 synced。
     _setState(SyncState.syncing);
     try {
       await _pullWithRetry();

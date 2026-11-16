@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:sync_core/sync_core.dart';
 
@@ -58,14 +60,31 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context, result);
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _error = register ? '注册失败，请重试' : '登录失败，请重试';
+          _error = register
+              ? '注册失败：${_describe(e)}'
+              : '登录失败：${_describe(e)}';
           _busy = false;
         });
       }
     }
+  }
+
+  /// 把异常转成可读描述，透出底层原因（TLS 握手失败、网络错误等），
+  /// 便于真机排障——而非笼统的「失败，请重试」（T-31）。
+  String _describe(Object e) {
+    if (e is HandshakeException) {
+      return 'TLS 握手失败（服务器证书未通过校验）';
+    }
+    if (e is SocketException) {
+      return '网络连接失败';
+    }
+    if (e is StateError) {
+      return e.message;
+    }
+    return e.toString();
   }
 
   /// 登录/注册成功后的认领：本机有未同步条目时询问是否推送到云端。
