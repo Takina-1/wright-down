@@ -29,7 +29,7 @@
 | 编号 | 事项 | 状态 | 下一步 | 关联 |
 |---|---|---|---|---|
 | T-13 | release APK 仍用 debug keys 签名 | 未处理 | 正式发布前配置真实签名 | 部署计划 §11 |
-| T-14 | 服务器证书绑死 IP `8.148.158.13`；CA 私钥只在开发机，不入库不上服务器 | 已知限制 | IP 变更需重签并重新发版 APK | 部署计划 §11 |
+| T-14 | 服务器证书绑死 IP `8.148.158.13`；CA 私钥只在开发机，不入库不上服务器 | 已关闭 | 第十三轮（2026-11-18）：改用 Cloudflare 代理 + 公网证书（Let's Encrypt），证书不再绑 IP——IP 变更只改 Cloudflare DNS，无需重签重发 APK；客户端不再内嵌自签 CA，私钥不再随包分发 | 测试报告「第十三轮」；部署计划 §11 |
 | T-15 | 实例规格 `ecs.e-c1m1.large`（1.6 GiB 突发型）承载数据库 | 未变配 | e→g 跨规格族不能直接变配，需变配 + 重启流程，或换新实例 | 部署计划 §11 |
 | T-16 | `deploy/ram-policy.json`（只读 RAM 策略）尚未附加到 RAM 子用户 | 未附加 | 附加后才能查询 `DescribeResourcesModification` 等只读接口 | 部署链路 |
 | T-17 | nginx 443 已被公网扫描器探测到（访问日志见 `195.96.139.110` 扫 `/` → 404） | 已记录未处理 | 视需要加限流或屏蔽 | 本轮部署 |
@@ -63,7 +63,7 @@
 
 | 编号 | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| T-30 | **私有 CA 内嵌 APK 的公开发布风险**：任何人反编译 APK 即可提取该 CA 公钥，APK 外泄时等同于「信任任意人自签证书」的钥匙 | 未处理 | 公开分发前必须改用公开可信证书（域名 + Let's Encrypt 自动续期） |
+| T-30 | **私有 CA 内嵌 APK 的公开发布风险**：任何人反编译 APK 即可提取该 CA 公钥，APK 外泄时等同于「信任任意人自签证书」的钥匙 | 已关闭 | 第十三轮（2026-11-18）：改走 Cloudflare 公网证书（Let's Encrypt），客户端 `TlsTrust` 退化为仅信任系统 CA，删除 `assets/diary_ca.crt` 与 `res/raw/diary_ca.crt`，APK 不再内嵌私有 CA——信任委托给 Cloudflare 公共体系，私有 CA 风险消除 | 测试报告「第十三轮」 |
 | T-31 | **登录/注册失败吞掉真实原因**：`login_page.dart` 的 `catch (_)` 只显示「注册失败，请重试」，`HandshakeException` 等底层原因丢失 | 已关闭 | 第十二轮（2026-11-15）：`catch (e)` 透出异常描述（`_describe`：`HandshakeException`→TLS 握手失败、`SocketException`→网络连接失败、`StateError`→消息），不再只显示笼统「失败，请重试」；新增 TLS 透出测试 |
 | T-32 | **未登录时状态误显示「已同步」**：`sync_engine.dart` 的 `triggerPull` 在 `_me()` 返回 null 时提前返回、不抛异常，状态被置为 `synced` | 已关闭 | 第十二轮（2026-11-15）：`triggerPull` 增加登录预检（`_me()` 返回 null 直接返回），未登录不再置 `synced`，与 `triggerPush` 的 T-11 对称；新增测试验证未登录不置 synced |
 
@@ -93,5 +93,7 @@ F013 的 T-01 / T-02（真机验收）已于第十一轮（2026-11-15）在真�
 
 **第十二轮裁决（2026-11-15）**：T-31 登录/注册失败透出底层原因 + T-32 未登录不置 synced**合入 `main`**。依据：`login_page` 的 `catch` 改为透出异常描述（TLS/网络/StateError 分型），`sync_engine.triggerPull` 增加登录预检与 `triggerPush` 对称；宿主 analyze 无新增、`flutter test` 463 项全过（新增 2 项缺陷测试）。纯客户端小改，无服务端行为变更。
 
-下一轮补做 T-04（跨设备第二台拉回）与 T-24（真机照片链路），再评估 T-25 带宽缓解；T-30（私有 CA 公开分发风险）留待公开发布前处理。
+**第十三轮裁决（2026-11-18）**：改走 Cloudflare 代理 + 公网证书，去掉内嵌自签 CA**合入 `main`**。依据：根因是备案网关拦 Cloudflare→源站入站 443（525），改用 Cloudflare Tunnel（cloudflared 出站）绕开；客户端 `TlsTrust` 退化为仅信任系统 CA，删除自签 CA 资产，APK 不再内嵌私有 CA；真机注册（用户落库 `$2b$`）与推送（条目落库 payload 正确）经 Cloudflare 隧道全部验证，logcat 无 TLS 异常。T-14（证书绑 IP）、T-30（私有 CA 公开分发风险）关闭。
+
+下一轮补做 T-04（跨设备第二台拉回）与 T-24（真机照片链路），再评估 T-25 带宽缓解。
 

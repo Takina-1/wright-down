@@ -576,3 +576,49 @@ CA 以 asset 随包分发，主流程与照片代理共用同一可信 client；
 
 - T-30（私有 CA 内嵌 APK 公开分发风险）留待公开发布前处理。
 - T-04（跨设备第二台）、T-24（真机照片链路）仍待第二台设备。
+
+## 第十三轮：Cloudflare 公网证书与域名迁移（2026-11-18）
+
+### 目标
+
+把自签 CA + IP 直连（`https://8.148.158.13`）迁移到 Cloudflare 代理 + 公网证书 + 域名（`https://sync.takina.dpdns.org`），解决 T-14（证书绑死 IP）、T-30（私有 CA 内嵌 APK 公开分发风险），并绕开备案网关对 Cloudflare→源站入站 443 的拦截（525）。
+
+### 根因与方案
+
+- **备案网关拦截**：Cloudflare 代理模式连源站 443 时用域名 SNI，备案网关按域名拦截非备案域名 → TLS 握手失败 → HTTP 525。设备直连 IP 可用（SNI 是 IP，不匹配域名）。
+- **方案**：改用 **Cloudflare Tunnel（cloudflared）**——ECS 上 cloudflared 出站连 Cloudflare，不经过入站 443，备案网关拦不到。cloudflared 转发到本地 Dart（`127.0.0.1:8080`），绕过 nginx 与自签证书。Cloudflare 提供 Let's Encrypt 公网证书。
+
+### 客户端改动（分支 `feat/F013-cloudflare-domain-migration`）
+
+- `TlsTrust` 退化为仅信任系统 CA（`withTrustedRoots: true`），去掉 `rootBundle` 加载自签 CA；`clientWithTrustedCerts` 保留供测试注入。
+- 删除 `assets/diary_ca.crt`、`res/raw/diary_ca.crt`；`pubspec.yaml` 去掉 assets 入口；`network_security_config.xml` 去掉 `@raw/diary_ca`。
+- `make-cert.sh` 去掉客户端 CA 同步（云端走 Cloudflare 公网证书）。
+- `tls_trust_test` 删掉 2 个依赖自签 asset 的用例。
+
+### 服务器侧
+
+- ECS 安装 cloudflared 2026.11.1，systemd 常驻，`--config /etc/cloudflared/config.yml`。
+- ingress：`sync.takina.dpdns.org → http://127.0.0.1:8080`；Cloudflare DNS 建 CNAME 指向隧道。
+- cloudflared 日志：4 条 `Registered tunnel connection`，precheck 全 PASS，无 503。
+
+### 验证（真机：小米 2211133C / Android 15 / MIUI）
+
+| 项 | 证据 | 结果 |
+|---|---|---|
+| 公网访问 | `https://sync.takina.dpdns.org/sync` → 401（`/` → 404，Dart 无根路由） | 通过 |
+| 证书 | issuer = Let's Encrypt（公网 CA，非自签） | 通过 |
+| logcat | 无 `HandshakeException`/`CERTIFICATE_VERIFY` | 通过 |
+| **T-01 注册** | psql 用户 `f013-cloud-1794933416@local.test` 落库（`$2b$` bcrypt）——请求经 Cloudflare 隧道到达 Dart | **通过** |
+| **T-02 推送** | psql 条目 `13e71999-…` 落库，payload `{"v":"T02-cloud-push-test-…"}`，seq 26 | **通过** |
+
+### 宿主验证
+
+| 检查 | 结果 |
+|---|---|
+| `flutter analyze` | 仅 pre-existing 4 项（无新增） |
+| `flutter test` 全量 | 461 项全过（删 2 个自签 asset 用例） |
+
+### 遗留
+
+- T-04（跨设备第二台拉回）、T-24（真机照片链路）仍待第二台设备。
+- T-13（release 签名）、T-15（实例变配）等运维项不变。
