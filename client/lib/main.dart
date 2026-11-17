@@ -50,8 +50,8 @@ class _StartupState extends State<_Startup> {
       factory: databaseFactory,
       path: path.join(await getDatabasesPath(), 'local_diary.db'),
     );
-    // TlsTrust：系统 CA ∪ 内嵌自签 CA。dart:io 不读 network_security_config.xml，
-    // 自签 CA 必须在 Dart 侧显式信任，否则真机 TLS 握手必失败。
+    // TlsTrust：信任系统 CA。云端经 Cloudflare 代理，Cloudflare 用公网 CA
+    // 签发证书，系统信任库已覆盖，无需再内嵌自签 CA。
     final httpClient = await TlsTrust.instance.client();
     final baseUrl = syncBaseUrl();
     // T-08：token 经 SharedPreferences 持久化——App 重启免登录。

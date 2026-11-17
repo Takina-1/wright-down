@@ -57,19 +57,12 @@ echo "==> 校验证书链"
 openssl verify -CAfile ca.crt server.crt
 openssl x509 -in server.crt -noout -subject -ext subjectAltName
 
-# CA 公钥证书分发给客户端两处：
-#   - client/assets/diary_ca.crt                     Dart 侧 TLS 信任锚点
-#             （dart:io 不读 network_security_config.xml）
-#   - client/android/app/src/main/res/raw/diary_ca.crt  Android 原生网络栈用
-# 两处内容必须字节一致 —— client/test/data/remote/tls_trust_test.dart 有断言。
-CLIENT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cp "${OUT}/ca.crt" "${CLIENT_ROOT}/client/assets/diary_ca.crt"
-cp "${OUT}/ca.crt" \
-   "${CLIENT_ROOT}/client/android/app/src/main/res/raw/diary_ca.crt"
+# 注意：云端已改用 Cloudflare 代理 + 公网证书（Let's Encrypt），客户端不再内嵌
+# 自签 CA（见 feat/F013-cloudflare-domain-migration）。本脚本仍生成服务器证书
+# 供本地 nginx / 直连调试用；ca.crt 不再分发到客户端。
 
 echo
 echo "产物在 ${OUT}"
-echo "  ca.crt     -> 已复制到 client/assets/diary_ca.crt 与"
-echo "                client/android/app/src/main/res/raw/diary_ca.crt"
-echo "  server.key + server.crt -> 上传到服务器 /etc/nginx/ssl/diary-sync/"
+echo "  server.key + server.crt -> 上传到服务器 /etc/nginx/ssl/diary-sync/（本地调试用）"
+echo "  ca.crt     -> 留在本机，不再分发到客户端（云端走 Cloudflare 公网证书）"
 echo "  ca.key     -> 留在本机，不要上传"

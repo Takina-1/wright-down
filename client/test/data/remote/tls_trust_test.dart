@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:local_diary/src/data/remote/tls_trust.dart';
@@ -30,25 +29,6 @@ void main() {
   }
 
   group('TlsTrust', () {
-    test('asset 可加载，且是 PEM 格式的 CA 证书', () async {
-      final data = await rootBundle.load('assets/diary_ca.crt');
-      final bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      expect(bytes.length, greaterThan(100));
-      final pem = String.fromCharCodes(bytes);
-      expect(pem, startsWith('-----BEGIN CERTIFICATE-----'));
-      expect(pem, contains('-----END CERTIFICATE-----'));
-    });
-
-    test('asset 与 res/raw 内嵌的那份字节一致（防止 CA 漂移）', () async {
-      final data = await rootBundle.load('assets/diary_ca.crt');
-      final bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final onDisk =
-          await File('android/app/src/main/res/raw/diary_ca.crt').readAsBytes();
-      expect(bytes, equals(onDisk));
-    });
-
     test('追加信任锚点后，能连上自签证书的本地 TLS 服务器', () async {
       final server = await startTlsServer();
       addTearDown(() => server.close(force: true));

@@ -36,8 +36,7 @@ class HttpCosGateway implements CosGateway {
   final String baseUrl;
   /// 当前登录 token；未登录返回 null。
   final Future<String?> Function() tokenLoader;
-  /// 注入的 client；为空时惰性取可信 client（系统 CA ∪ 自签 CA）。
-  /// 不能退化成 `http.Client()` —— 那会走不受信的 TLS 栈，与真机缺陷同款陷阱。
+  /// 注入的 client；为空时惰性取可信 client（信任系统 CA，Cloudflare 公网证书由系统信任库覆盖）。
   final http.Client? client;
   final Future<http.StreamedResponse> Function(
       http.Request request)? _handler;
