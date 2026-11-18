@@ -610,6 +610,7 @@ CA 以 asset 随包分发，主流程与照片代理共用同一可信 client；
 | logcat | 无 `HandshakeException`/`CERTIFICATE_VERIFY` | 通过 |
 | **T-01 注册** | psql 用户 `f013-cloud-1794933416@local.test` 落库（`$2b$` bcrypt）——请求经 Cloudflare 隧道到达 Dart | **通过** |
 | **T-02 推送** | psql 条目 `13e71999-…` 落库，payload `{"v":"T02-cloud-push-test-…"}`，seq 26 | **通过** |
+| **T-04 拉取** | PG 插入模拟他设备推送的条目 `t04-pull-test-0001`（seq 28），真机重启触发 pull，本地 SQLite 查得该条目——拉取链路（设备→Cloudflare→隧道→Dart→PG→拉回本地）验证通过 | **通过**（拉取链路；严格双物理机仍待第二台） |
 
 ### 宿主验证
 
