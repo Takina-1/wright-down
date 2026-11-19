@@ -623,3 +623,42 @@ CA 以 asset 随包分发，主流程与照片代理共用同一可信 client；
 
 - T-04（跨设备第二台拉回）、T-24（真机照片链路）仍待第二台设备。
 - T-13（release 签名）、T-15（实例变配）等运维项不变。
+
+## 第十四轮：T-24 真机照片链路验证（2026-11-19）
+
+### 目标
+
+验证 F013 最后一块未闭环的功能：真机照片随日记推送 → 经 ECS 代理写入腾讯云 COS → 拉回时字节一致（AC-06 / T-24）。
+
+### 验证（真机：小米 2211133C / Android 15 / MIUI；云端：Cloudflare 隧道 → ECS `diary-sync` → 腾讯云 COS）
+
+| 环节 | 证据 | 结果 |
+|---|---|---|
+| 真机选照片 | 设备相册选图（543KB JPEG），编辑器出现缩略图 | 通过 |
+| 照片上传 | `POST /sync/photo/upload` → HTTP **200**，key `photos/b45d866019c05b22bea004a46e03ca9967c8b01e8ab1907f76a704f1fa9b092c` | 通过 |
+| photoKey 落库 | PG 条目 seq 58 的 `photo` 字段 = `{"v":"photos/b45d8660…92c"}` | 通过 |
+| COS 对象命名 | 对象 key 后缀 == 照片实际 sha256（`b45d8660…92c`） | 通过 |
+| 照片拉回 | 经隧道 `GET /sync/photo/<key>` → 200，543037 字节 | 通过 |
+| **字节一致性** | 下载字节 sha256 == 设备本地 BLOB sha256 == `b45d8660…92c`，**逐字节一致** | **通过** |
+
+> 隧道链路：App → Cloudflare（Let's Encrypt 公网证书）→ cloudflared 隧道 → Dart `127.0.0.1:8080` → COS 代理 → 腾讯云 COS → 原路返回。543KB 照片经隧道上传实测 **18 秒**（ECS 出向 ~428 KB/s，T-25 已知限制）。
+
+### 同轮新发现的两个真实缺陷（已登记待办）
+
+| 编号 | 现象 | 影响 |
+|---|---|---|
+| **T-33** | 服务端返回的 photoKey 带 `photos/` 前缀，客户端却用**裸** sha256 比对 → 永不相等 → **每次推送都重传照片** | 543KB/张 × 每次推送 ≈ 18 秒白等 + 流量浪费 |
+| **T-34** | 推送触发点为退后台/退出与切标签；**切标签在前台 → 5.2 秒推送完成；退后台 → Dart isolate 被 Android 挂起，`await` 迟迟不返回**（实测条目约 40 分钟后才落库），状态停在 `synced` 误示已同步 | 用户写完日记直接切走/退出时，日记可能长时间同步不出去 |
+
+**定位方法**：给 `SyncEngine.triggerPush`/`_schedulePush`/`pushOnce` 与 `HttpCosGateway.upload` 加临时 `print`（debug APK 的 Dart print 可在 logcat 的 `flutter` 标签看到），配合 cloudflared `--loglevel debug` 看请求是否到达隧道——确认退后台期间设备只发 GET（拉取，前台触发）不发 POST（推送）。调试 print 已在验证后全部还原，cloudflared 日志级别已恢复 `info`。
+
+### 严格双设备部分
+
+T-24 的**双设备互传**（A 设备推 → B 设备拉回照片）仍需第二台设备，本轮未执行，已如实登记。
+
+### 宿主验证
+
+| 检查 | 结果 |
+|---|---|
+| `flutter analyze` | 仅 pre-existing 4 项（无新增） |
+| `flutter test` 全量 | 463 项全过（本轮无代码改动） |

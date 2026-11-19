@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-15（第十一轮真机 TLS 信任验收已合并；第十二轮：T-31/T-32 错误透出与状态语义修复）
+- 最后更新：2026-11-19（第十四轮：T-24 真机照片链路验证通过；新增 T-33/T-34 两个缺陷待办）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -14,7 +14,7 @@
 | T-03 | **DP-09 落库验证**：bcrypt 哈希以 `$2b$` 形式落进 `users.password_hash`，DB 级邮箱唯一性约束生效 | 已验证 | 第七轮：`select left(password_hash,4)` → `$2b$`；重复邮箱注册 409（集成测试）；entries seq 无重复（10 行 10 唯一） | 已随 T-06 验证 | 部署计划 DP-09 |
 | T-04 | 真机端到端跨设备同步（含照片） | 拉取链路已验证，严格双设备仍待第二台 | 仅一台真机；在 PG 插入模拟他设备推送的条目，真机 pull 拉回本地 SQLite 验证通过；严格双物理机拉回未做 | 第十三轮：PG 插入 `t04-pull-test-0001`（seq 28），真机重启触发 pull，本地 SQLite 查得该条目——拉取链路（设备→Cloudflare→隧道→Dart→PG→拉回本地）验证通过；严格双设备与照片同步待第二台 | 设计 AC-03 / AC-06；第六轮服务端等效已覆盖推送/拉取/COS 链路 |
 | T-05 | **建桶 + CAM 凭证**：腾讯云 COS ap-guangzhou 私有桶、CAM 子用户 + bucket 级最小权限策略（只授 PutObject/GetObject，不授 DeleteObject）、密钥只存 ECS 服务端环境变量 | 已完成 | 2026-11-10 冒烟通过：桶/凭证/策略生效，密钥落 /etc/diary-sync/cos.env（0600） | 控制台建桶 → 写 `deploy/cam-policy.json` → 建子用户绑定策略 → 密钥写入 ECS 环境变量 | [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md) §3.4 |
-| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 代码侧+服务端等效完成 | 服务端代理端点 + 客户端 `HttpCosGateway` 实现完毕，ECS 冒烟 + 第六轮服务端 API 等效（上传/下载比对/HEAD 判存）全过；**真机装机弹窗已可点按（T-01/T-02 已过），真机照片链路待第二轮验证** | T-05 完成后实现；**注意 ECS 出向带宽仅 ~428 KB/s 与 nginx 请求体上限（已调至 16m）** | COS 设计 §3.2 / §3.3 |
+| T-24 | **真机腾讯云 COS 代理读写**：服务端加照片上传/下载端点（代理 COS PUT/GET）、客户端 `CosGateway` 真机版替换 `FakeCos`、真机双设备验收 | 真机照片链路已验证；严格双设备验收仍待第二台 | 第十四轮（2026-11-19）：真机选照片随日记推送 → 照片上传 COS（543KB，HTTP 200）→ photoKey 落 PG → 经隧道下载与设备本地 BLOB **逐字节一致**（sha256 `b45d8660…92c` == COS 对象 key `photos/<sha256>`）；**双设备互传仍待第二台** | 严格双设备验收待第二台；**注意 ECS 出向带宽仅 ~428 KB/s（543KB 照片经隧道实测上传 18 秒）** | COS 设计 §3.2 / §3.3 |
 
 ## B. 功能延后（未实现）
 
@@ -66,6 +66,8 @@
 | T-30 | **私有 CA 内嵌 APK 的公开发布风险**：任何人反编译 APK 即可提取该 CA 公钥，APK 外泄时等同于「信任任意人自签证书」的钥匙 | 已关闭 | 第十三轮（2026-11-18）：改走 Cloudflare 公网证书（Let's Encrypt），客户端 `TlsTrust` 退化为仅信任系统 CA，删除 `assets/diary_ca.crt` 与 `res/raw/diary_ca.crt`，APK 不再内嵌私有 CA——信任委托给 Cloudflare 公共体系，私有 CA 风险消除 | 测试报告「第十三轮」 |
 | T-31 | **登录/注册失败吞掉真实原因**：`login_page.dart` 的 `catch (_)` 只显示「注册失败，请重试」，`HandshakeException` 等底层原因丢失 | 已关闭 | 第十二轮（2026-11-15）：`catch (e)` 透出异常描述（`_describe`：`HandshakeException`→TLS 握手失败、`SocketException`→网络连接失败、`StateError`→消息），不再只显示笼统「失败，请重试」；新增 TLS 透出测试 |
 | T-32 | **未登录时状态误显示「已同步」**：`sync_engine.dart` 的 `triggerPull` 在 `_me()` 返回 null 时提前返回、不抛异常，状态被置为 `synced` | 已关闭 | 第十二轮（2026-11-15）：`triggerPull` 增加登录预检（`_me()` 返回 null 直接返回），未登录不再置 `synced`，与 `triggerPush` 的 T-11 对称；新增测试验证未登录不置 synced |
+| T-33 | **photoKey 格式不一致导致每次推送都重传照片**：服务端 `photoUploadHandler` 返回的 key 是 `photos/<sha256>`（带前缀），客户端 `pushOnce` 却用 `_photoHash(photo)`（**裸** sha256）比对 → 永不相等 → 每次 push 都重新上传照片 | 未处理 | 第十四轮（2026-11-19）真机验证时发现：同一张 543KB 照片在连续两次推送中被上传两次 | 按 [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md)「客户端 photoKey 是裸 sha256，服务端内部映射 `<prefix>/<sha256>`」的契约，**服务端上传响应应返回裸 sha256**（下载端点内部再映射），或客户端比对时同时认两种格式；修复后每次推送可省一次上传（实测 18 秒/张） |
+| T-34 | **退到后台触发的推送会挂起**：推送触发点为 `didChangeAppLifecycleState`（退后台/退出）与 `_selectTab`（切标签）。切标签在前台 → 推送 5.2 秒完成；**退后台 → Dart isolate 被 Android 限流/挂起，`await` 迟迟不返回**（实测条目约 40 分钟后才落库），且 UI 状态停在 `synced`（误示已同步） | 未处理 | 第十四轮（2026-11-19）真机验证时发现；`cloudflared` debug 日志证实退后台期间设备只发 GET（拉取，前台触发）不发 POST（推送） | 推送改为「前台定时 + 退后台前预热」，或给退后台推送加超时与重试；至少应让退后台时的状态不误显 `synced` |
 
 ## 合并门槛
 
@@ -95,5 +97,7 @@ F013 的 T-01 / T-02（真机验收）已于第十一轮（2026-11-15）在真�
 
 **第十三轮裁决（2026-11-18）**：改走 Cloudflare 代理 + 公网证书，去掉内嵌自签 CA**合入 `main`**。依据：根因是备案网关拦 Cloudflare→源站入站 443（525），改用 Cloudflare Tunnel（cloudflared 出站）绕开；客户端 `TlsTrust` 退化为仅信任系统 CA，删除自签 CA 资产，APK 不再内嵌私有 CA；真机注册（用户落库 `$2b$`）与推送（条目落库 payload 正确）经 Cloudflare 隧道全部验证，logcat 无 TLS 异常。T-14（证书绑 IP）、T-30（私有 CA 公开分发风险）关闭。
 
-下一轮补做 T-04（跨设备第二台拉回）与 T-24（真机照片链路），再评估 T-25 带宽缓解。
+**第十四轮裁决（2026-11-19）**：T-24 真机照片链路验证通过**合入 `main`**（仅文档记录，无代码改动）。依据：真机选照片随日记推送 → 照片上传 COS 200（543KB）→ photoKey 落 PG → 经 Cloudflare 隧道下载与设备本地 BLOB **逐字节一致**（sha256 与 COS 对象 key 一致）；宿主 analyze 无新增、`flutter test` 463 项全过。同轮**新发现两个真实缺陷并登记**：T-33（photoKey 格式不一致 → 每次推送重传照片）、T-34（退后台触发的推送挂起）。
+
+下一轮补做 T-04 / T-24 的**严格双设备**部分（需第二台设备），修 T-33/T-34 两个缺陷，并评估 T-25 带宽缓解。
 
