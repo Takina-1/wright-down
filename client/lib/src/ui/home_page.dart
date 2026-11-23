@@ -133,12 +133,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
-      // 退到后台/失焦前落盘，落盘成功后触发一次推送（防抖合并多次写入）。
-      unawaited(_flushAndPush());
+      // 退到后台/失焦前落盘。**不在此处发网络推送**（T-34）：Android 会挂起或
+      // 限流后台的 Dart isolate，HTTP 请求的 await 可能迟迟不返回，推送会长时间
+      // 挂起（日记同步不出去，真机实测约 40 分钟才落库）。推送改由「回前台」
+      // 与「引擎启动」补上。
+      unawaited(_flushOnly());
     } else if (state == AppLifecycleState.resumed) {
-      // 回到前台拉一次远端变更；未登录时 triggerPull 内部 _me() 返回 null 提前退出。
+      // 回到前台：拉一次远端变更，并把退后台期间落盘的条目补推出去（T-34）。
+      // 未登录时 triggerPull 内部 _me() 返回 null 提前退出。
       final engine = widget.syncEngine;
-      if (engine != null) unawaited(engine.triggerPull());
+      if (engine != null) {
+        unawaited(engine.triggerPull());
+        engine.triggerPush();
+      }
     }
   }
 
@@ -151,6 +158,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (saved) widget.syncEngine?.triggerPush();
     return saved;
   }
+
+  /// 只落盘、不触发网络推送（T-34）。
+  ///
+  /// 退后台/退出时 App 即将被 Android 挂起或杀掉，此刻发网络推送会挂起
+  /// （await 迟迟不返回），日记同步不出去。推送由「回前台」与「引擎启动」补推。
+  Future<bool> _flushOnly() => _editor.flush();
 
   Future<void> _selectTab(int tab) async {
     if (_transitioning || tab == _tab) return;
@@ -388,7 +401,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _transitioning = true;
     });
-    final saved = await _flushAndPush();
+    final saved = await _flushOnly();
     if (!mounted) return;
     if (saved) {
       await SystemNavigator.pop();

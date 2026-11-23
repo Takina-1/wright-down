@@ -79,6 +79,22 @@ Future<void> _waitFor(
   throw StateError('timed out waiting for $target; current=${engine.state}');
 }
 
+/// 记录 triggerPush 调用的 SyncEngine 替身：只计数，不真正推送。
+class _CountingSyncEngine extends SyncEngine {
+  int pushes = 0;
+  _CountingSyncEngine({
+    required super.repository,
+    required super.remote,
+    required super.auth,
+    required super.cos,
+    required super.now,
+  });
+  @override
+  void triggerPush({Duration debounce = const Duration(seconds: 30)}) {
+    pushes++;
+  }
+}
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -316,6 +332,25 @@ void main() {
               '与 triggerPush 登录预检对称）');
       expect(remote.pullCalls, 0, reason: '未登录不应发起拉取请求');
       await sub.cancel();
+      engine.stop();
+      await repo.close();
+    });
+  });
+
+  group('T-34 推送触发时机', () {
+    test('start() 安排一次推送（补推退后台/退出前落盘的条目）', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final engine = _CountingSyncEngine(
+        repository: repo,
+        remote: _FakeRemote(),
+        auth: _FakeAuth(),
+        cos: FakeCos(),
+        now: () => DateTime.now(),
+      );
+      engine.start();
+      expect(engine.pushes, 1,
+          reason: '启动必须补推退后台/退出前已落盘但未推送的条目（T-34）');
       engine.stop();
       await repo.close();
     });
