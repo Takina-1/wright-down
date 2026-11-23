@@ -2,7 +2,7 @@
 
 - 功能编号：F013
 - 关联：[设计](../superpowers/specs/云同步设计-cloud-sync-design.md) · [部署链路计划](../superpowers/plans/云同步-部署链路-ecs-deploy.md) · [任务台账](README.md) · [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)
-- 最后更新：2026-11-19（第十四轮：T-24 真机照片链路验证通过；新增 T-33/T-34 两个缺陷待办）
+- 最后更新：2026-11-23（第十五轮：T-33 photoKey 前缀重传、T-34 退后台推送挂起——两个缺陷均修复并真机复验通过）
 - 记录规则：未执行 / 未验证的项一律记「未执行」，不写「通过」。本表是 F013 未完成项的**唯一维护位置**；功能状态仍维护在 [任务台账](README.md) 的 F013 行，测试结果维护在 [测试报告](../test-reports/F013-云同步测试报告-cloud-sync-test-report.md)。
 
 ## A. 验收未执行（真机 / 落库）
@@ -66,8 +66,8 @@
 | T-30 | **私有 CA 内嵌 APK 的公开发布风险**：任何人反编译 APK 即可提取该 CA 公钥，APK 外泄时等同于「信任任意人自签证书」的钥匙 | 已关闭 | 第十三轮（2026-11-18）：改走 Cloudflare 公网证书（Let's Encrypt），客户端 `TlsTrust` 退化为仅信任系统 CA，删除 `assets/diary_ca.crt` 与 `res/raw/diary_ca.crt`，APK 不再内嵌私有 CA——信任委托给 Cloudflare 公共体系，私有 CA 风险消除 | 测试报告「第十三轮」 |
 | T-31 | **登录/注册失败吞掉真实原因**：`login_page.dart` 的 `catch (_)` 只显示「注册失败，请重试」，`HandshakeException` 等底层原因丢失 | 已关闭 | 第十二轮（2026-11-15）：`catch (e)` 透出异常描述（`_describe`：`HandshakeException`→TLS 握手失败、`SocketException`→网络连接失败、`StateError`→消息），不再只显示笼统「失败，请重试」；新增 TLS 透出测试 |
 | T-32 | **未登录时状态误显示「已同步」**：`sync_engine.dart` 的 `triggerPull` 在 `_me()` 返回 null 时提前返回、不抛异常，状态被置为 `synced` | 已关闭 | 第十二轮（2026-11-15）：`triggerPull` 增加登录预检（`_me()` 返回 null 直接返回），未登录不再置 `synced`，与 `triggerPush` 的 T-11 对称；新增测试验证未登录不置 synced |
-| T-33 | **photoKey 格式不一致导致每次推送都重传照片**：服务端 `photoUploadHandler` 返回的 key 是 `photos/<sha256>`（带前缀），客户端 `pushOnce` 却用 `_photoHash(photo)`（**裸** sha256）比对 → 永不相等 → 每次 push 都重新上传照片 | 未处理 | 第十四轮（2026-11-19）真机验证时发现：同一张 543KB 照片在连续两次推送中被上传两次 | 按 [COS 设计](../superpowers/specs/腾讯云COS对象存储-tencent-cos-storage-design.md)「客户端 photoKey 是裸 sha256，服务端内部映射 `<prefix>/<sha256>`」的契约，**服务端上传响应应返回裸 sha256**（下载端点内部再映射），或客户端比对时同时认两种格式；修复后每次推送可省一次上传（实测 18 秒/张） |
-| T-34 | **退到后台触发的推送会挂起**：推送触发点为 `didChangeAppLifecycleState`（退后台/退出）与 `_selectTab`（切标签）。切标签在前台 → 推送 5.2 秒完成；**退后台 → Dart isolate 被 Android 限流/挂起，`await` 迟迟不返回**（实测条目约 40 分钟后才落库），且 UI 状态停在 `synced`（误示已同步） | 未处理 | 第十四轮（2026-11-19）真机验证时发现；`cloudflared` debug 日志证实退后台期间设备只发 GET（拉取，前台触发）不发 POST（推送） | 推送改为「前台定时 + 退后台前预热」，或给退后台推送加超时与重试；至少应让退后台时的状态不误显 `synced` |
+| T-33 | **photoKey 格式不一致导致每次推送都重传照片**：服务端 `photoUploadHandler` 返回的 key 是 `photos/<sha256>`（带前缀），客户端 `pushOnce` 却用 `_photoHash(photo)`（**裸** sha256）比对 → 永不相等 → 每次 push 都重新上传照片 | 已关闭 | 第十五轮（2026-11-23）：客户端比较 photoKey 时统一取**裸 sha256**（新增 `_bareHash`，带前缀与裸两种形态都认）——dev 态 FakeCos（裸）与 prod 态 COS 代理（带前缀）行为就此一致；新增 2 项回归测试。**真机复验**：修复后同一张 543KB 照片在后续推送中上传次数 **0**（修复前每次都传、每次约 18 秒） | 测试报告「第十五轮」 |
+| T-34 | **退到后台触发的推送会挂起**：推送触发点为 `didChangeAppLifecycleState`（退后台/退出）与 `_selectTab`（切标签）。切标签在前台 → 推送 5.2 秒完成；**退后台 → Dart isolate 被 Android 限流/挂起，`await` 迟迟不返回**（实测条目约 40 分钟后才落库），且 UI 状态停在 `synced`（误示已同步） | 已关闭 | 第十五轮（2026-11-23）：推送改为**只在 App 前台触发**（切标签 / 回前台 / 引擎启动）；退后台与退出**只落盘**（新增 `_flushOnly`），不再发网络推送——Android 会挂起后台 Dart isolate；回前台与引擎启动时补推。新增 2 项回归测试（widget 生命周期 + 引擎 `start()`）。**真机复验**：退后台 45 秒内**无 POST /sync/batch**（修复前会挂起），回前台后 30 秒防抖**正常发出** | 测试报告「第十五轮」 |
 
 ## 合并门槛
 
@@ -99,5 +99,7 @@ F013 的 T-01 / T-02（真机验收）已于第十一轮（2026-11-15）在真�
 
 **第十四轮裁决（2026-11-19）**：T-24 真机照片链路验证通过**合入 `main`**（仅文档记录，无代码改动）。依据：真机选照片随日记推送 → 照片上传 COS 200（543KB）→ photoKey 落 PG → 经 Cloudflare 隧道下载与设备本地 BLOB **逐字节一致**（sha256 与 COS 对象 key 一致）；宿主 analyze 无新增、`flutter test` 463 项全过。同轮**新发现两个真实缺陷并登记**：T-33（photoKey 格式不一致 → 每次推送重传照片）、T-34（退后台触发的推送挂起）。
 
-下一轮补做 T-04 / T-24 的**严格双设备**部分（需第二台设备），修 T-33/T-34 两个缺陷，并评估 T-25 带宽缓解。
+**第十五轮裁决（2026-11-23）**：T-33 photoKey 前缀导致每次推送重传照片 + T-34 退后台推送挂起**两个缺陷修复合入 `main`**。依据：客户端统一按裸 sha256 比较 photoKey（dev 的 FakeCos 与 prod 的 COS 代理口径一致）；推送改为只在 App 前台触发（切标签 / 回前台 / 引擎启动），退后台与退出只落盘。新增 4 项回归测试；宿主 analyze 无新增、`flutter test` **465 项全过**。**真机复验**：同一张 543KB 照片后续推送上传次数 **0**（修复前每次都传）；退后台 45 秒内**无 POST /sync/batch**、回前台 30 秒防抖后**正常发出**。
+
+下一轮补做 T-04 / T-24 的**严格双设备**部分（需第二台设备），并评估 T-25 带宽缓解。
 
