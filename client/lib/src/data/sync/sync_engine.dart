@@ -87,7 +87,8 @@ class SyncEngine {
     for (var i = 0; i < entries.length; i++) {
       final e = entries[i];
       if (e.photo != null &&
-          (e.photoKey == null || _photoHash(e.photo!) != e.photoKey!)) {
+          (e.photoKey == null ||
+              _photoHash(e.photo!) != _bareHash(e.photoKey!))) {
         final key = await cos.upload(e.photo!);
         final stamps = {...e.syncStamps, 'photo': now().millisecondsSinceEpoch};
         final updated = Entry(
@@ -141,7 +142,7 @@ class SyncEngine {
       // 用 saveMerged 保留 photoKey 与 photo 戳（photo 是本地缓存不进 sync 字段）。
       if (merged.photoKey != null &&
           (merged.photo == null ||
-              _photoHash(merged.photo!) != merged.photoKey!)) {
+              _photoHash(merged.photo!) != _bareHash(merged.photoKey!))) {
         final bytes = await cos.download(merged.photoKey!);
         final withPhoto = Entry(
           id: merged.id,
@@ -174,6 +175,9 @@ class SyncEngine {
       (_) => unawaited(triggerPull()),
     );
     unawaited(triggerPull()); // 启动即拉一次
+    // T-34：启动即推一次——把上次退后台/退出前已落盘但没来得及推送的条目补推出去。
+    // （退后台时不能靠网络推送完成，见 [triggerPush] 的说明。）
+    triggerPush();
   }
 
   /// 停止同步：取消拉取/推送定时器并关闭状态流。
@@ -203,6 +207,11 @@ class SyncEngine {
 
   /// 触发推送：登录态预检通过后，取消既有防抖并安排 [debounce] 后推送
   /// （合并多次写入为一次往返）。未登录时直接跳过——登出后不浪费一次推送循环。
+  ///
+  /// **调用时机（T-34）**：只在 App 前台时调用（切标签、回前台、引擎启动）。
+  /// 退后台/退出时不要调用——Android 会挂起后台 Dart isolate，HTTP 请求的
+  /// `await` 可能迟迟不返回，推送会长时间挂起（日记同步不出去，实测约 40 分钟）。
+  /// 那时只需落盘，推送由「回前台」与「引擎启动」补上。
   void triggerPush({Duration debounce = const Duration(seconds: 30)}) {
     unawaited(_me().then((me) {
       if (me == null) return; // T-11：未登录不安排推送。
@@ -287,6 +296,16 @@ class SyncEngine {
   /// 照片内容 sha256 hex——与 FakeCos/HttpCosGateway 的 photoKey 口径一致。
   static String _photoHash(Uint8List bytes) =>
       sha256.convert(bytes).toString();
+
+  /// photoKey 的裸 sha256 部分。
+  ///
+  /// 服务端 COS 代理返回的 key 带前缀（`<prefix>/<sha256>`，如 `photos/<sha256>`），
+  /// 而 FakeCos（开发态）返回裸 sha256。比较时统一取末段，两种形态都认——
+  /// 否则同一张照片会被反复上传/下载（T-33：真机实测每次推送都重传 543KB）。
+  static String _bareHash(String photoKey) {
+    final i = photoKey.lastIndexOf('/');
+    return i < 0 ? photoKey : photoKey.substring(i + 1);
+  }
 
   /// dayKey 必须是零填充的 ISO 日期，形如 2026-11-03。
   String _dayKey(DateTime dt) =>

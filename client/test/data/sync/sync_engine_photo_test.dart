@@ -31,6 +31,30 @@ class _FakeAuth implements AuthProvider {
   Future<void> signOut() async {}
 }
 
+/// 模拟真机服务端 COS 代理：返回**带前缀**的 key（`photos/<sha256>`），
+/// 并统计上传次数——用于 T-33 回归（带前缀的 photoKey 不得导致重复上传）。
+class _PrefixedKeyCos implements CosGateway {
+  int uploads = 0;
+  int downloads = 0;
+  final List<Uint8List> uploaded = [];
+
+  @override
+  Future<String> upload(Uint8List bytes) async {
+    uploads++;
+    uploaded.add(bytes);
+    return 'photos/${sha256.convert(bytes).toString()}';
+  }
+
+  @override
+  Future<Uint8List> download(String key) async {
+    downloads++;
+    return uploaded.isEmpty ? Uint8List(0) : uploaded.first;
+  }
+
+  @override
+  Future<String> presign(String key) async => 'fake://$key';
+}
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -191,6 +215,82 @@ void main() {
           reason: '远端照片变更后必须重下覆盖本地旧 BLOB');
       await repo.close();
       await oss.close();
+    });
+
+    test('T-33 带前缀的 photoKey 不触发重复上传', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final cos = _PrefixedKeyCos();
+      final remote = _FakeRemote();
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _FakeAuth(),
+        cos: cos,
+        now: () => DateTime.now(),
+      );
+      final photo = Uint8List.fromList([1, 2, 3]);
+      await repo.save(Entry(
+        id: 'e1',
+        content: '带照片',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        dayKey: '2026-11-19',
+        photo: photo,
+      ));
+
+      await engine.pushOnce();
+      final afterFirst = (await repo.exportAll()).single;
+      expect(afterFirst.photoKey, 'photos/${sha256.convert(photo).toString()}',
+          reason: '服务端返回的是带前缀的 key');
+      expect(cos.uploads, 1);
+
+      // 第二次推送：photoKey 带前缀但照片内容未变——不得重传（T-33）。
+      await engine.pushOnce();
+      expect(cos.uploads, 1,
+          reason: 'photoKey 带前缀时也不得重复上传同一张照片（T-33）');
+      await repo.close();
+    });
+
+    test('T-33 pull 时带前缀的 photoKey 不触发重复下载', () async {
+      final repo =
+          SqliteEntryRepository(factory: databaseFactoryFfi, path: ':memory:');
+      final cos = _PrefixedKeyCos();
+      final remote = _FakeRemote();
+      final photo = Uint8List.fromList([1, 2, 3]);
+      final digest = sha256.convert(photo).toString();
+      await repo.save(Entry(
+        id: 'e1',
+        content: '远端带前缀 photoKey',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        dayKey: '2026-11-19',
+        photo: photo,
+        photoKey: 'photos/$digest',
+      ));
+      final engine = SyncEngine(
+        repository: repo,
+        remote: remote,
+        auth: _FakeAuth(),
+        cos: cos,
+        now: () => DateTime.now(),
+      );
+      remote.nextPull = SyncPullResponse(cursor: 1, entries: [
+        SyncEntry(
+          id: 'e1',
+          createdAt: 1000,
+          fields: {
+            'photo': FieldValue('photos/$digest', 9999999999999),
+            'content': FieldValue('远端带前缀 photoKey', 100),
+          },
+        ),
+      ]);
+      await engine.pullOnce();
+      final e = (await repo.exportAll()).singleWhere((x) => x.id == 'e1');
+      expect(e.photoKey, 'photos/$digest');
+      expect(cos.downloads, 0,
+          reason: '本地照片与远端 photoKey（带前缀）一致时不得重复下载（T-33）');
+      await repo.close();
     });
   });
 }
